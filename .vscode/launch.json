@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Serveur (debug)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/server",
+      "program": "${workspaceFolder}/apps/server/src/index.ts",
+      "runtimeArgs": ["--import", "tsx"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Web (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/apps/web",
+      "preLaunchTask": "web: dev"
+    },
+    {
+      "name": "Test Vitest (fichier ouvert)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["vitest", "run", "${relativeFile}"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack (serveur + web)",
+      "configurations": ["Serveur (debug)", "Web (Chrome)"],
+      "stopAll": true
+    }
+  ]
+}

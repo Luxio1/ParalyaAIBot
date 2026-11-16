@@ -1,0 +1,23 @@
+# Usage : copier .env.example en .env, renseigner APP_SECRET, puis
+#   docker compose up --build -d
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Valeurs imposées dans le conteneur (priment sur le .env)
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATA_DIR: /data
+    ports:
+      # Port publié sur la machine hôte (modifiable avec PUBLISH_PORT)
+      - '${PUBLISH_PORT:-3000}:3000'
+    volumes:
+      - bot-data:/data
+
+volumes:
+  bot-data:

@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+.git
+.vscode
+.env
+.env.*
+!.env.example
+data
+legacy
+docs
+coverage
+setup-log.txt
+legacy-config.json
+*.db
+*.db-*
