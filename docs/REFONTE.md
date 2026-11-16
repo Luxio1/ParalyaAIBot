@@ -49,7 +49,7 @@ Web     ─▶ PlaygroundTransport ─▶ MessagePipeline ◀── ConfigServic
 ```
 
 ```
-discord-ai-bot/
+ParalyaAIBot/
 ├─ apps/
 │  ├─ server/src/
 │  │  ├─ index.ts            # bootstrap : env → DB → services → HTTP → bot (autostart)

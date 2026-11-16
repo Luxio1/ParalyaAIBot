@@ -2,6 +2,7 @@
 #   docker compose up --build -d
 services:
   bot:
+    image: paralya-ai-bot
     build:
       context: .
       dockerfile: docker/Dockerfile

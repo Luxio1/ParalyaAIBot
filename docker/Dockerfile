@@ -1,5 +1,5 @@
 # Image unique : API + bot + dashboard buildé.
-# Build depuis la racine du dépôt : docker build -f docker/Dockerfile -t discord-ai-bot .
+# Build depuis la racine du dépôt : docker build -f docker/Dockerfile -t paralya-ai-bot .
 
 FROM node:22-slim AS build
 ENV PNPM_HOME=/pnpm

@@ -1,4 +1,4 @@
-# CLAUDE.md — Refonte « Discord AI Bot Studio »
+# CLAUDE.md — Refonte « Paralya AI Bot »
 
 ## Contexte
 Refonte complète d'un bot Discord propulsé par l'IA, piloté par un dashboard web.
