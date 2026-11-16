@@ -1,4 +1,4 @@
-# CLAUDE.md — Refonte « Paralya AI Bot »
+# CLAUDE.md : refonte « Paralya AI Bot »
 
 ## Contexte
 Refonte complète d'un bot Discord propulsé par l'IA, piloté par un dashboard web.
@@ -31,10 +31,71 @@ Refonte complète d'un bot Discord propulsé par l'IA, piloté par un dashboard 
 - TypeScript strict, ESM, Node 22+, pnpm workspaces.
 - Nommage : fichiers `camelCase.ts`, composants React `PascalCase.tsx`.
 - Tests Vitest à côté du code du cœur (`*.test.ts`).
-- Commits conventionnels (`feat:`, `fix:`, `refactor:`…), un commit par étape cohérente.
+- Formatage : Prettier du dépôt (2 espaces, guillemets simples). Il prime sur toute préférence personnelle d'indentation.
+
+## Style de code
+
+### Écrire pour le prochain lecteur
+Celui qui lira ce code n'a pas ton contexte et ouvre le fichier pour une seule réponse. Quand aucune règle ne tranche, choisir la version qui lui coûte le moins :
+1. Peut-il répondre sans quitter le fichier ? Les noms, les types et la structure portent l'information.
+2. Qu'est-ce qui est impossible à deviner ? Seulement cela mérite un commentaire.
+3. Que doit-il garder en tête ? Chaque branche, variable mutable, indirection ou booléen anonyme occupe sa mémoire de travail (5 à 7 éléments).
+
+Interdits :
+- **Paraphraser le code** dans un commentaire ou une JSDoc.
+- **Code défensif inutile** : pas de vérification que les types garantissent déjà, pas de `try/catch` sans récupération, pas de valeur par défaut pour un état impossible. Faire confiance à TypeScript strict et aux schémas Zod (la validation se fait aux frontières : env, HTTP, Discord, réponses IA).
+- **Abstraire pour un appelant qui n'existe pas** : wrapper, registre, flag, interface à une seule implémentation. Exception assumée : `Transport` et `AiProvider`, qui ont chacun deux implémentations prévues.
+
+En cas de doute sur un commentaire, un helper ou un paramètre : ne pas l'ajouter.
+
+Écrire en deux passes : d'abord le code sans commentaires, puis le relire comme le prochain développeur et n'annoter que ce qui surprend.
+
+### Pas de sur-ingénierie
+- Retours anticipés plutôt que `if/else` imbriqués.
+- Pas de helper, classe ou convertisseur appelé une seule fois : code direct et linéaire d'abord.
+- Préférer `map`, `filter`, `some`, `every`, `Object.fromEntries` et les ternaires aux boucles avec accumulateur, sauf si l'expression devient illisible.
+- `readonly`, `as const` et `const` par défaut ; un objet de configuration n'est jamais muté.
+- Pas de booléen anonyme en argument : un objet nommé (`{ includeArchived: true }`) ou une union de chaînes.
+- Une fonction s'écrit en paragraphes (ligne vide quand la question du lecteur change). Une fonction qui aurait besoin de cinq commentaires de section est cinq fonctions.
+- Dans une classe ou un module, ordre descendant : le point d'entrée public d'abord, puis ce qu'il appelle.
+
+### Chaque changement a un budget de lignes
+- **Chercher avant d'écrire** : dans le dépôt, `packages/shared`, les dépendances et la bibliothèque standard de Node.
+- **Remplacer, jamais en parallèle** : le code supplanté est supprimé avec ses appels, ses tests, sa config et sa doc dans le même changement. Pas d'alias déprécié ni de flag `useNewX`.
+- **Un paramètre ou une option de config doit avoir un appelant aujourd'hui.**
+- **Rester dans la tâche** : les améliorations remarquées vont dans le rapport, pas dans le diff.
+- **Relire `git diff` pour le réduire** avant de rendre la main, et terminer par les totaux ajoutés/supprimés de `git diff --stat` (une ligne d'explication si le solde est positif).
+
+### Commentaires et documentation
+- Un commentaire explique un pourquoi que le code ne peut pas dire. Test : nommer ce que le lecteur comprendrait de travers sans lui.
+- Une ligne par commentaire, deux au maximum. Les vraies explications vont dans une JSDoc (`/** */`) au-dessus de la déclaration, courte (1 à 10 lignes).
+- **Décrire le présent, jamais le passé** : pas de « avant », « ne ... plus », « remplace », « l'ancien X », « extrait de ». Git garde l'historique.
+- Ne jamais créer de fichier Markdown sans demande explicite. Quand un comportement documenté change, modifier le fichier existant et supprimer ce qui est devenu faux. Le README dit comment installer, lancer et utiliser.
+
+### Typographie (code, commentaires, UI, docs, commits, réponses)
+- Caractères interdits : tiret long ou demi-cadratin, points de suspension en un seul caractère, signe de multiplication, flèches, guillemets courbes anglais, bannières en caractères de dessin. Utiliser `-`, `...`, `x`, `->` et des guillemets droits. Les guillemets français « » restent autorisés dans les textes en français.
+- Remplacer le caractère ne suffit pas : reformuler la phrase (point, virgule ou parenthèse).
+- Éviter les tournures « Ce n'est pas X, c'est Y », les énumérations en trois temps systématiques et le gras à outrance.
+
+### Tests
+- Tester le comportement par l'API publique avec de vrais objets (Fastify `inject`, SQLite `:memory:`). Ne jamais mocker le code du projet ; mocker seulement les E/S en bordure (Discord, Gemini, réseau).
+- Un test par comportement qui peut plausiblement casser. Pas de test de constante, de getter trivial ou de « a bien été appelé ».
+- Modifier ou supprimer du code implique de modifier ou supprimer ses tests dans le même diff.
+
+## Git
+- **Ne jamais commiter de sa propre initiative.** Terminer, faire le rapport, puis proposer un message de commit court. Quand l'utilisateur demande un commit, pousser juste après.
+- Format : commit conventionnel avec gitmoji après les deux-points, sujet court et au plus une ou deux phrases. Exemple : `feat(server): ✨ Ajoute la route /healthz`.
+- Gitmojis : 🐛 fix, ✨ feature, 📝 docs, ♻️ refactor, 🔥 suppression, 🚀 build, 🎨 style, ✅ tests, 🔧 chore, 🚧 WIP, ⚡️ perf, 👷 CI.
+- Jamais de ligne `Claude-Session:` ni de lien de session dans un commit ou une pull request.
+
+## Style des échanges
+- Direct, concis, technique. Pas de formules de politesse, d'annonces ni d'avertissements de principe. Ne pas s'excuser : corriger.
+- Contester une idée mal fondée avec des arguments ; vérifier les sources (documentation officielle, littérature) avant une décision d'architecture et les citer.
+- Proactif dans les suggestions, conservateur dans les diffs. Montrer seulement les extraits modifiés.
+- En fin de tâche, expliquer simplement ce qui a changé, compréhensible par un non-technicien.
 
 ## Commandes
-- `pnpm dev` — server (:3000, `tsx watch`) + web (:5173, Vite avec proxy vers l'API) en mode watch
+- `pnpm dev` : server (:3000, `tsx watch`) + web (:5173, Vite avec proxy vers l'API) en mode watch
 - `pnpm build` (web puis server) / `pnpm start` (un seul port : API + dashboard buildé)
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` (un fichier : `pnpm vitest run chemin/du/fichier.test.ts`)
 - `pnpm format` / `pnpm format:check` (Prettier ; `docs/`, `legacy/`, `scripts/` sont ignorés)
