@@ -1,0 +1,6 @@
+{
+  "name": "Discord AI Bot Studio",
+  "description": "Configurez, personnalisez et lancez votre propre bot Discord intelligent propulsé par l'IA Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
