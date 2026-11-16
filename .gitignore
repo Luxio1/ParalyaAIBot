@@ -10,3 +10,6 @@ data/
 *.db-*
 legacy-config.json
 .DS_Store
+*.tsbuildinfo
+*.log
+setup-log.txt
