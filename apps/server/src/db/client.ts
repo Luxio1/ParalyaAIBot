@@ -8,12 +8,11 @@ export type Db = BetterSQLite3Database<typeof schema>;
 
 export interface DatabaseHandle {
   db: Db;
-  /** Vérifie que la base répond (utilisé par `/healthz`). */
   ping(): boolean;
   close(): void;
 }
 
-/** Ouvre (et crée si besoin) la base SQLite. `:memory:` est accepté pour les tests. */
+/** Crée le dossier et le fichier au besoin. `:memory:` est accepté. */
 export function openDatabase(file: string): DatabaseHandle {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const sqlite = new Database(file);

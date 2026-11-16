@@ -16,7 +16,6 @@ export const LOG_TYPES = [
 export const logTypeSchema = z.enum(LOG_TYPES);
 export type LogType = z.infer<typeof logTypeSchema>;
 
-/** Libellés français affichés dans l'interface. */
 export const LOG_TYPE_LABELS: Record<LogType, string> = {
   system: 'Système',
   discord: 'Discord',
@@ -31,7 +30,6 @@ export const LOG_TYPE_LABELS: Record<LogType, string> = {
 
 export const logEntrySchema = z.object({
   id: z.string().min(1),
-  /** Horodatage ISO 8601. */
   timestamp: z.iso.datetime(),
   type: logTypeSchema,
   message: z.string(),

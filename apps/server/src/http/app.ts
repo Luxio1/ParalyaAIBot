@@ -13,7 +13,6 @@ function loggerOptions(env: Env): FastifyServerOptions['logger'] {
   if (env.nodeEnv === 'test') return false;
   return {
     level: env.logLevel,
-    // Ne jamais logger un secret : en-têtes et champs sensibles masqués.
     redact: {
       paths: [
         'req.headers.authorization',
@@ -36,11 +35,11 @@ function loggerOptions(env: Env): FastifyServerOptions['logger'] {
   };
 }
 
-/** Construit l'application HTTP sans l'écouter (testable via `app.inject()`). */
+/** Ne lance pas l'écoute : les tests passent par `app.inject()`. */
 export async function buildApp({ env, database }: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: loggerOptions(env),
-    bodyLimit: 1024 * 1024, // 1 Mo (le legacy acceptait 50 Mo)
+    bodyLimit: 1024 * 1024,
   });
 
   registerHealthRoute(app, database);

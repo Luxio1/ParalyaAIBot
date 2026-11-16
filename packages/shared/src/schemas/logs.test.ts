@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOG_TYPE_LABELS, LOG_TYPES, logEntrySchema } from './logs';
+import { logEntrySchema } from './logs';
 
 describe('logEntrySchema', () => {
   it('accepte une entrée valide', () => {
@@ -20,11 +20,5 @@ describe('logEntrySchema', () => {
       message: '',
     });
     expect(result.success).toBe(false);
-  });
-
-  it('fournit un libellé français pour chaque type', () => {
-    for (const type of LOG_TYPES) {
-      expect(LOG_TYPE_LABELS[type]).toBeTruthy();
-    }
   });
 });

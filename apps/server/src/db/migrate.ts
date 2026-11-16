@@ -17,7 +17,6 @@ function findMigrationsFolder(): string {
   return folder;
 }
 
-/** Applique les migrations en attente (idempotent, exécuté à chaque démarrage). */
 export function runMigrations(db: Db): void {
   migrate(db, { migrationsFolder: findMigrationsFolder() });
 }

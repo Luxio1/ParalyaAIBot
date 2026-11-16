@@ -86,7 +86,7 @@ ParalyaAIBot/
 - [ ] **J9 Durcissement & déploiement** — tests, import legacy, sauvegarde DB, README déploiement VPS/Railway/Fly, revue sécurité.
 
 ## 5. Journal des décisions
-### J0 — Fondations (2026-11-16)
+### J0 Fondations (2026-11-16)
 - **Décisions §2 confirmées** par l'utilisateur. Modèle IA par défaut : Gemini 3.1 Flash-Lite (`DEFAULT_AI_MODEL` dans `packages/shared`, modifiable dans le dashboard à partir de J3).
 - **TypeScript 6.0** (et non 7) : `typescript-eslint` 8 n'accepte pas encore TS 7.
 - **`packages/shared` n'est pas buildé** : ses `exports` pointent vers `src/index.ts`. Vite le consomme directement ; `tsup` l'intègre au bundle serveur (`noExternal`). Il est donc en `devDependencies` des apps.
@@ -95,5 +95,5 @@ ParalyaAIBot/
 - **Ports** : API 3000 (`PORT`), Vite 5173 en dev avec proxy `/api`, `/healthz`, `/ws`. En production un seul port sert l'API et le dashboard (`WEB_DIST_DIR`, repli SPA).
 - **Règle d'architecture n°1 outillée** : ESLint `no-restricted-imports` interdit `discord.js`, Fastify, `adapters/` et `http/` dans `apps/server/src/core/**`.
 - **pnpm 12** : les scripts d'installation autorisés sont listés dans `allowBuilds` (`pnpm-workspace.yaml`).
-- **Docker** : image `node:22-slim` multi-étapes, utilisateur non-root, `HEALTHCHECK` sur `/healthz`. L'étape `pnpm deploy --prod --legacy` a été vérifiée localement ; **le build de l'image lui-même n'a pas pu être testé** (Docker non installé) → à faire dès que Docker est disponible, au plus tard en J9.
+- **Docker** : image `node:22-slim` multi-étapes, utilisateur non-root, `HEALTHCHECK` sur `/healthz`. L'étape `pnpm deploy --prod --legacy` a été vérifiée localement ; **le build de l'image lui-même n'a pas pu être testé** (Docker non installé). À faire dès que Docker est disponible, au plus tard en J9.
 - **Reporté à J1** : en-têtes de sécurité (`@fastify/helmet`, CSP), auth, tables de configuration et de secrets.

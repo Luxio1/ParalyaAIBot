@@ -26,16 +26,13 @@ export interface Env {
   isProduction: boolean;
   host: string;
   port: number;
-  /** Dossier absolu des données persistantes. */
   dataDir: string;
-  /** Chemin absolu du fichier SQLite. */
   databaseFile: string;
-  /** Clé maîtresse de chiffrement des secrets. Ne jamais logger. */
+  /** Clé maîtresse de chiffrement des secrets. Ne jamais la logger. */
   appSecret: string;
   logLevel: string;
-  /** Clé Gemini de repli (si aucune clé n'est enregistrée dans le dashboard). */
+  /** Utilisée seulement si aucune clé n'est enregistrée dans le dashboard. */
   geminiApiKey: string | undefined;
-  /** Dossier absolu du dashboard buildé (servi en production). */
   webDistDir: string;
 }
 
@@ -52,7 +49,7 @@ export class EnvError extends Error {
   }
 }
 
-/** Remonte l'arborescence jusqu'à la racine du monorepo (repli : dossier courant). */
+/** Renvoie `from` si aucun `pnpm-workspace.yaml` n'est trouvé en remontant. */
 export function findRootDir(from: string = process.cwd()): string {
   let current = resolve(from);
   for (;;) {
@@ -63,7 +60,7 @@ export function findRootDir(from: string = process.cwd()): string {
   }
 }
 
-/** Charge le fichier `.env` de la racine s'il existe (sans écraser l'environnement réel). */
+/** Les variables déjà définies dans l'environnement ne sont pas écrasées. */
 export function loadDotEnv(rootDir: string): void {
   const file = join(rootDir, '.env');
   if (existsSync(file)) process.loadEnvFile(file);

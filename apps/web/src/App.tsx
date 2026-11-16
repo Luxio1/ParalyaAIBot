@@ -38,17 +38,17 @@ export function App() {
             state={health.isPending ? 'pending' : health.isSuccess ? 'ok' : 'error'}
             detail={
               health.isPending
-                ? 'Connexion…'
+                ? 'Connexion...'
                 : health.isSuccess
                   ? `En ligne · v${health.data.version} · depuis ${formatUptime(health.data.uptime)}`
-                  : 'Injoignable — lancez « pnpm dev »'
+                  : 'Injoignable. Lancez « pnpm dev ».'
             }
           />
           <StatusRow
             label="Base de données"
             state={health.isPending ? 'pending' : databaseOk ? 'ok' : 'error'}
             detail={
-              health.isPending ? 'Connexion…' : databaseOk ? 'Opérationnelle' : 'Indisponible'
+              health.isPending ? 'Connexion...' : databaseOk ? 'Opérationnelle' : 'Indisponible'
             }
           />
         </ul>

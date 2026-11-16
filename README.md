@@ -49,7 +49,7 @@ vivent dans un dossier unique (`DATA_DIR`, `/data` en Docker) qu'il suffit de sa
 
 - **Docker / VPS** : `docker compose up --build -d`
 - **Sans Docker** : `pnpm install && pnpm build && NODE_ENV=production HOST=0.0.0.0 pnpm start`
-- **PaaS (Railway, Fly.io, Render…)** : déployer `docker/Dockerfile` avec un volume monté sur
+- **PaaS (Railway, Fly.io, Render)** : déployer `docker/Dockerfile` avec un volume monté sur
   `/data` et la variable `APP_SECRET`.
 
 Le guide de déploiement détaillé arrive au jalon J9.
