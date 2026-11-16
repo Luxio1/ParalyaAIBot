@@ -20,14 +20,14 @@ Export Google AI Studio : Express + discord.js v14 + Gemini (`@google/genai`), f
 ### À réutiliser (porter dans `core/`)
 `resolveDiscordMentions`, `splitDiscordMessage`, `extractHtmlText`, `extractUrlsFromText`, prompt d'évaluation groupée des règles (un appel JSON par message), prompts d'interlocuteur/vision/liens, `PERSONA_PRESETS` (App.tsx), commandes et règles d'exemple (`server.ts` `currentConfig`), types de `src/types.ts`.
 
-## 2. Décisions par défaut (à confirmer / modifier)
+## 2. Décisions retenues
 | Sujet | Défaut retenu | Statut |
 |---|---|---|
-| IA | Abstraction `AiProvider`, Gemini en premier ; 2ᵉ provider ultérieurement ; clé saisie dans le dashboard (chiffrée) avec repli sur `.env` | ☐ à confirmer |
-| Hébergement | Image Docker unique (API + bot + front buildé), volume `/data` | ☐ à confirmer |
-| Auth dashboard | Un compte admin (argon2, cookie httpOnly, anti-bruteforce) ; table `users` prête pour multi-admin | ☐ à confirmer |
-| Base | SQLite + Drizzle (schéma compatible Postgres) | ☐ à confirmer |
-| Migration | Script `scripts/export-legacy-config.js` + écran d'import | ☐ à confirmer |
+| IA | Abstraction `AiProvider`, Gemini en premier ; 2ᵉ provider ultérieurement ; clé saisie dans le dashboard (chiffrée) avec repli sur `.env` | ☑ confirmé (2026-11-16) |
+| Hébergement | Image Docker unique (API + bot + front buildé), volume `/data` | ☑ confirmé (2026-11-16) |
+| Auth dashboard | Un compte admin (argon2, cookie httpOnly, anti-bruteforce) ; table `users` prête pour multi-admin | ☑ confirmé (2026-11-16) |
+| Base | SQLite + Drizzle (schéma compatible Postgres) | ☑ confirmé (2026-11-16) |
+| Migration | Script `scripts/export-legacy-config.js` + écran d'import | ☑ confirmé (2026-11-16) |
 
 ## 3. Architecture cible
 
@@ -74,7 +74,7 @@ discord-ai-bot/
 ```
 
 ## 4. Jalons
-- [ ] **J0 Fondations** — monorepo, TS strict, ESLint/Prettier, `packages/shared`, Drizzle + migrations, env validé, Dockerfile, debug VS Code. *Validation : `pnpm dev` et `docker compose up` démarrent.*
+- [x] **J0 Fondations** *(terminé le 2026-11-16 ; `docker compose up` reste à vérifier, Docker absent du poste de dev)* — monorepo, TS strict, ESLint/Prettier, `packages/shared`, Drizzle + migrations, env validé, Dockerfile, debug VS Code. *Validation : `pnpm dev` et `docker compose up` démarrent.*
 - [ ] **J1 Sécurité & config** — auth, secrets chiffrés, `ConfigService` + API CRUD, WebSocket, LogBus + console live, `safeFetch`. *Validation : dashboard protégé, config persistée après redémarrage, aucun secret dans les réponses API.*
 - [ ] **J2 Cycle de vie du bot** — `BotManager` start/stop/hot-apply, statut temps réel, découverte serveurs/salons/rôles, lien OAuth2, autostart. *Validation : bot piloté depuis l'UI, config modifiée sans reconnexion.*
 - [ ] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
@@ -86,4 +86,14 @@ discord-ai-bot/
 - [ ] **J9 Durcissement & déploiement** — tests, import legacy, sauvegarde DB, README déploiement VPS/Railway/Fly, revue sécurité.
 
 ## 5. Journal des décisions
-_(à compléter au fil des jalons)_
+### J0 — Fondations (2026-11-16)
+- **Décisions §2 confirmées** par l'utilisateur. Modèle IA par défaut : Gemini 3.1 Flash-Lite (`DEFAULT_AI_MODEL` dans `packages/shared`, modifiable dans le dashboard à partir de J3).
+- **TypeScript 6.0** (et non 7) : `typescript-eslint` 8 n'accepte pas encore TS 7.
+- **`packages/shared` n'est pas buildé** : ses `exports` pointent vers `src/index.ts`. Vite le consomme directement ; `tsup` l'intègre au bundle serveur (`noExternal`). Il est donc en `devDependencies` des apps.
+- **Pilote SQLite : `better-sqlite3`** (binaires précompilés, fonctionne sous Node 22 à 26, Windows et Linux). Base dans `DATA_DIR/bot.db`, mode WAL, migrations appliquées automatiquement au démarrage (`dist/migrations` copié au build).
+- **Configuration** : `.env` à la racine, chargé par `process.loadEnvFile` (pas de dépendance dotenv), validé par Zod (`apps/server/src/env.ts`). `APP_SECRET` ≥ 32 caractères obligatoire, sinon arrêt avec message explicite. Les chemins relatifs sont résolus depuis la racine du monorepo.
+- **Ports** : API 3000 (`PORT`), Vite 5173 en dev avec proxy `/api`, `/healthz`, `/ws`. En production un seul port sert l'API et le dashboard (`WEB_DIST_DIR`, repli SPA).
+- **Règle d'architecture n°1 outillée** : ESLint `no-restricted-imports` interdit `discord.js`, Fastify, `adapters/` et `http/` dans `apps/server/src/core/**`.
+- **pnpm 12** : les scripts d'installation autorisés sont listés dans `allowBuilds` (`pnpm-workspace.yaml`).
+- **Docker** : image `node:22-slim` multi-étapes, utilisateur non-root, `HEALTHCHECK` sur `/healthz`. L'étape `pnpm deploy --prod --legacy` a été vérifiée localement ; **le build de l'image lui-même n'a pas pu être testé** (Docker non installé) → à faire dès que Docker est disponible, au plus tard en J9.
+- **Reporté à J1** : en-têtes de sécurité (`@fastify/helmet`, CSP), auth, tables de configuration et de secrets.

@@ -33,9 +33,16 @@ Refonte complète d'un bot Discord propulsé par l'IA, piloté par un dashboard 
 - Tests Vitest à côté du code du cœur (`*.test.ts`).
 - Commits conventionnels (`feat:`, `fix:`, `refactor:`…), un commit par étape cohérente.
 
-## Commandes (à compléter au jalon J0)
-- `pnpm dev` — server + web en mode watch
-- `pnpm build` / `pnpm start`
-- `pnpm lint`, `pnpm typecheck`, `pnpm test`
-- `pnpm db:migrate`, `pnpm db:generate`
+## Commandes
+- `pnpm dev` — server (:3000, `tsx watch`) + web (:5173, Vite avec proxy vers l'API) en mode watch
+- `pnpm build` (web puis server) / `pnpm start` (un seul port : API + dashboard buildé)
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` (un fichier : `pnpm vitest run chemin/du/fichier.test.ts`)
+- `pnpm format` / `pnpm format:check` (Prettier ; `docs/`, `legacy/`, `scripts/` sont ignorés)
+- `pnpm db:generate` (après modification de `apps/server/src/db/schema.ts`), `pnpm db:migrate` (les migrations sont aussi appliquées au démarrage)
 - `docker compose up --build`
+- Ajouter une dépendance : `pnpm --filter @bot/server add <paquet>` (ou `@bot/web`, `@bot/shared`)
+
+## Notes d'environnement
+- `.env` à la racine (modèle : `.env.example`) ; `APP_SECRET` obligatoire. Packages : `@bot/server`, `@bot/web`, `@bot/shared`.
+- TypeScript 6.0 tant que `typescript-eslint` ne supporte pas TS 7.
+- Poste de dev Windows : écrire les fichiers avec les outils d'édition plutôt qu'avec de longs heredocs shell.
