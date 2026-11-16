@@ -1,0 +1,12 @@
+legacy/
+node_modules/
+dist/
+coverage/
+data/
+pnpm-lock.yaml
+apps/server/src/db/migrations/
+setup-log.txt
+docs/
+scripts/
+CLAUDE.md
+DEMARRAGE.md
