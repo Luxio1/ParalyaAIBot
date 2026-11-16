@@ -1,5 +1,5 @@
 /** Nom affiché de l'application. */
-export const APP_NAME = 'Discord AI Bot Studio';
+export const APP_NAME = 'Paralya AI Bot';
 
 /** Longueur maximale d'un message Discord (les réponses plus longues sont découpées). */
 export const DISCORD_MAX_MESSAGE_LENGTH = 2000;

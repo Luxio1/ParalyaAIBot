@@ -1,4 +1,6 @@
-# Discord AI Bot Studio
+# Paralya AI Bot
+
+Dépôt : https://github.com/Luxio1/ParalyaAIBot
 
 Bot Discord propulsé par l'IA (Gemini), piloté par un tableau de bord web : configuration, commandes
 personnalisées, règles d'événements, console en direct et simulateur.
