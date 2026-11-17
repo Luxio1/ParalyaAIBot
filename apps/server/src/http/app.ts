@@ -16,11 +16,13 @@ import type { DatabaseHandle } from '../db/client';
 import type { Env } from '../env';
 import { AppError } from '../lib/appError';
 import type { AuthService } from '../services/authService';
+import type { CommandService } from '../services/commandService';
 import type { ConfigService } from '../services/configService';
 import type { SecretsService } from '../services/secretsService';
 import { registerRealtimeRoutes } from './realtime';
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from './routes/auth';
 import { registerBotRoutes } from './routes/bot';
+import { registerCommandRoutes } from './routes/commands';
 import { registerConfigRoutes } from './routes/config';
 import { registerHealthRoute } from './routes/health';
 import { registerLogsRoutes } from './routes/logs';
@@ -38,12 +40,13 @@ export interface AppDeps {
   config: ConfigService;
   ai: AiService;
   memory: SessionStore;
+  commands: CommandService;
   bot: BotManager;
 }
 
 /** Ne lance pas l'écoute : les tests passent par `app.inject()`. */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const { env, database, logBus, auth, secrets, config, ai, memory, bot } = deps;
+  const { env, database, logBus, auth, secrets, config, ai, memory, commands, bot } = deps;
   const app = Fastify({
     logger: loggerOptions(env),
     bodyLimit: 1024 * 1024,
@@ -114,6 +117,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerBotRoutes(protectedApp, bot);
     registerConfigRoutes(protectedApp, config, ai, memory);
     registerMemoryRoutes(protectedApp, memory, config, logBus);
+    registerCommandRoutes(protectedApp, commands);
     registerRealtimeRoutes(protectedApp, logBus, bot, memory, auth);
   });
 

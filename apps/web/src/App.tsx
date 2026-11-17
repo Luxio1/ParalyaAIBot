@@ -8,6 +8,7 @@ import { RealtimeProvider } from '@/hooks/useRealtime';
 import { authStateQuery } from '@/lib/api';
 import { BehaviorPage } from '@/pages/BehaviorPage';
 import { BotPage } from '@/pages/BotPage';
+import { CommandsPage } from '@/pages/CommandsPage';
 import { ConsolePage } from '@/pages/ConsolePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { MemoryPage } from '@/pages/MemoryPage';
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/bot" replace /> },
       { path: 'bot', element: <BotPage /> },
       { path: 'comportement', element: <BehaviorPage /> },
+      { path: 'commandes', element: <CommandsPage /> },
       { path: 'memoire', element: <MemoryPage /> },
       { path: 'console', element: <ConsolePage /> },
       { path: 'parametres', element: <SettingsPage /> },

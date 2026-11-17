@@ -79,7 +79,7 @@ ParalyaAIBot/
 - [x] **J2 Cycle de vie du bot** — `BotManager` start/stop, reconnexion au changement de token, statut temps réel, découverte serveurs/salons/rôles, lien OAuth2, autostart. *Validation : bot piloté depuis l'UI ; « config modifiée sans reconnexion » se vérifie en J3, premier jalon avec des réglages.*
 - [x] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
 - [x] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
-- [ ] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
+- [x] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
 - [ ] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
 - [ ] **J7 Moteur d'événements** — règles, évaluation groupée (modèle rapide configurable), filtres, cooldowns, actions, variables, anti-doublon, testeur.
 - [ ] **J8 Playground & Guide** — simulateur sur le pipeline commun, onglet Guide Developer Portal.
@@ -146,3 +146,12 @@ ParalyaAIBot/
 - **Pages web** : `node-html-parser` 9.0.6 (la 9.0.7 avait moins de deux semaines) plutôt que les expressions régulières de l'ancienne version. Titre, description, texte de `main`/`article` sinon `body`, sans scripts, menus ni pied de page, limité à 4 000 caractères. User-Agent honnête (`compatible; ParalyaAIBot`).
 - **Injection de consignes** : message cité et pages sont placés dans des blocs `<donnees source="...">` que leur contenu ne peut pas refermer, et le prompt système interdit d'obéir aux instructions qu'ils contiennent.
 - **Interlocuteur** : pseudo et identifiant (`@username`) donnés à l'IA. Une image ou une réponse à un message sans texte obtient une réponse au lieu du message d'aide.
+
+### J5 Commandes (2026-11-17)
+- **Table `commands`** (et non un tableau dans le JSON des réglages) : chaque commande a un identifiant pour l'édition, et le nom est unique en base. `CommandService` les garde en mémoire ; une modification s'applique au message suivant.
+- **Exemples installés une seule fois** (`bot_settings.commands_seeded`) : supprimés, ils ne reviennent pas au redémarrage. « Restaurer les exemples » recrée les manquants et remet à zéro ceux qui portent le même nom, sans toucher aux autres commandes.
+- **Noms** : 1 à 32 lettres (accents compris), chiffres, `_` ou `-`, rangés en minuscules (`!Regles` fonctionne). 100 commandes au plus.
+- **Appel par le préfixe uniquement**, sur serveur comme en MP. Une commande inconnue ou désactivée, ou un nom écrit après une mention, part à l'IA comme une question. Une commande IA sans texte s'applique au message cité, sinon le bot rappelle son usage.
+- **Variables des réponses statiques** : `{commands}` (liste générée des commandes actives, que l'ancien `!help` écrivait à la main), `{prefix}`, `{user}`. Le préfixe seul affiche aussi cette liste.
+- **Modèle IA sans `{query}`** : le texte de l'utilisateur est ajouté à la fin au lieu d'être perdu. La consigne de la commande remplace le persona ; mémoire, images, liens et message cité s'appliquent comme pour une question libre. La mémoire garde l'appel tel qu'écrit (`!traduis bonjour`).
+- **Duplication** : la copie (`nom-copie`, `nom-copie-2`...) est désactivée, pour ne pas répondre deux fois avant d'avoir été modifiée.

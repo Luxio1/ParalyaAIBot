@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { AiError } from '../ai/aiProvider';
 import { AiService } from '../ai/aiService';
 import { FakeAiProvider } from '../ai/fakeAiProvider';
+import { openDatabase } from '../../db/client';
+import { runMigrations } from '../../db/migrate';
+import { CommandService } from '../../services/commandService';
 import { LogBus } from '../logs/logBus';
 import { SessionStore } from '../memory/sessionStore';
 import {
@@ -45,6 +48,7 @@ describe('MessagePipeline', () => {
   let aiProvider: FakeAiProvider;
   let logBus: LogBus;
   let memory: SessionStore;
+  let commands: CommandService;
   let pipeline: MessagePipeline;
   let quoted: QuotedMessage | null;
   let replies: string[];
@@ -55,7 +59,16 @@ describe('MessagePipeline', () => {
     aiProvider = new FakeAiProvider();
     logBus = new LogBus();
     memory = new SessionStore();
-    pipeline = new MessagePipeline(() => config, new AiService(aiProvider), memory, logBus);
+    const database = openDatabase(':memory:');
+    runMigrations(database.db);
+    commands = new CommandService(database.db, logBus);
+    pipeline = new MessagePipeline(
+      () => config,
+      new AiService(aiProvider),
+      memory,
+      commands,
+      logBus,
+    );
     quoted = null;
     replies = [];
     transport = {
@@ -94,10 +107,63 @@ describe('MessagePipeline', () => {
 
   it("envoie une aide si le déclencheur n'est suivi d'aucun texte", async () => {
     await handle({ text: '!' });
-    expect(replies).toEqual([
-      'Bonjour ! Pour me poser une question, écrivez votre question après « ! ».',
-    ]);
+    expect(replies[0]).toBe(
+      [
+        'Bonjour ! Pour me poser une question, écrivez votre question après « ! ».',
+        '',
+        '**Commandes :**',
+        '- `!code <texte>` : Assistant développeur : coder, déboguer, expliquer',
+        '- `!help` : Affiche les commandes disponibles',
+        '- `!regles` : Rappelle les règles du serveur',
+        '- `!resume <texte>` : Résume un texte en points clés',
+        '- `!traduis <texte>` : Traduit un texte en anglais (ou dans la langue demandée)',
+      ].join('\n'),
+    );
     expect(aiProvider.requests).toHaveLength(0);
+  });
+
+  it("répond à une commande statique sans appeler l'IA, quelle que soit la casse", async () => {
+    await handle({ text: '!Regles' });
+    expect(replies[0]).toMatch(/^📜 \*\*Règles du serveur :\*\*/);
+    expect(aiProvider.requests).toHaveLength(0);
+  });
+
+  it("remplace les variables d'une réponse statique", async () => {
+    await handle({ text: '!help' });
+    expect(replies[0]).toContain('- `!regles` : Rappelle les règles du serveur');
+    expect(replies[0]).toContain('question libre après « ! »');
+  });
+
+  it("applique le modèle et la consigne d'une commande IA", async () => {
+    await handle({ text: '!traduis bonjour tout le monde' });
+    const [request] = aiProvider.requests;
+    expect(request?.prompt).toBe(
+      "Traduis le texte suivant de manière naturelle et fidèle en anglais, ou dans la langue indiquée par l'utilisateur : bonjour tout le monde",
+    );
+    expect(request?.systemPrompt).toMatch(/^Tu es un traducteur professionnel\./);
+    expect(memory.history('guild:100000000000000001:200000000000000001', 60_000)[0]).toEqual({
+      role: 'user',
+      text: '!traduis bonjour tout le monde',
+    });
+  });
+
+  it('applique une commande IA sans texte au message cité, ou explique son usage', async () => {
+    await handle({ text: '!resume' });
+    expect(replies).toEqual(['Utilisation : `!resume <texte>`']);
+
+    quoted = { authorName: 'Bob', isBot: false, text: 'Un long texte', attachments: [] };
+    await handle({ text: '!resume', isReply: true });
+    expect(prompts()[0]).toMatch(/points clés clairs : le message cité$/);
+  });
+
+  it("envoie à l'IA une commande inconnue, désactivée ou appelée par mention", async () => {
+    const regles = commands.list().find((command) => command.name === 'regles');
+    if (regles) commands.update(regles.id, { ...regles, enabled: false });
+
+    await handle({ text: '!météo à Paris' });
+    await handle({ text: '!regles' });
+    await handle({ text: 'help', mentionsBot: true });
+    expect(prompts()).toEqual(['météo à Paris', 'regles', 'help']);
   });
 
   it("répond à une image envoyée sans texte au lieu de renvoyer l'aide", async () => {

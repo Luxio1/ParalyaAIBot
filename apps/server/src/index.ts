@@ -10,6 +10,7 @@ import { runMigrations } from './db/migrate';
 import { EnvError, findRootDir, loadDotEnv, parseEnv } from './env';
 import { buildApp } from './http/app';
 import { AuthService } from './services/authService';
+import { CommandService } from './services/commandService';
 import { ConfigService } from './services/configService';
 import { SecretsService } from './services/secretsService';
 
@@ -37,9 +38,21 @@ async function main(): Promise<void> {
   const memory = new SessionStore();
   // Les conversations expirées disparaissent du moniteur sans attendre un nouveau message.
   setInterval(() => memory.sweep(config.get().memoryRetentionMinutes * 60_000), 30_000).unref();
-  const pipeline = new MessagePipeline(() => config.get(), ai, memory, logBus);
+  const commands = new CommandService(database.db, logBus);
+  const pipeline = new MessagePipeline(() => config.get(), ai, memory, commands, logBus);
   const bot = new BotManager(database.db, secrets, logBus, pipeline);
-  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, memory, bot });
+  const app = await buildApp({
+    env,
+    database,
+    logBus,
+    auth,
+    secrets,
+    config,
+    ai,
+    memory,
+    commands,
+    bot,
+  });
   app.log.info(`${APP_NAME} v${APP_VERSION}, base de données : ${env.databaseFile}`);
 
   let closing = false;
