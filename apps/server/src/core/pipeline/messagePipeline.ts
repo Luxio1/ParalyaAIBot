@@ -4,6 +4,7 @@ import type { AiService } from '../ai/aiService';
 import { gatherContext, type MessageContext } from '../enrich/context';
 import type { LogBus } from '../logs/logBus';
 import type { SessionInfo, SessionStore } from '../memory/sessionStore';
+import type { RateLimiter } from '../ratelimit/rateLimiter';
 import {
   applyTemplate,
   commandList,
@@ -52,6 +53,8 @@ export interface Transport {
   startTyping(): () => void;
   /** Charge le message cité, seulement quand le bot a décidé de répondre. */
   fetchQuoted(): Promise<QuotedMessage | null>;
+  /** Vrai si l'auteur possède un serveur ou porte l'un de ces rôles (en MP : sur un serveur commun). */
+  isExempt(roleIds: string[]): Promise<boolean>;
 }
 
 /** Réponse aux utilisateurs quand l'IA échoue : la cause exacte va dans la console. */
@@ -60,6 +63,15 @@ export const AI_FAILURE_REPLY = 'Je ne peux pas répondre pour le moment.';
 const DEDUP_SIZE = 1000;
 const LOG_PREVIEW_LENGTH = 80;
 const DEFAULT_QUESTION = 'Réagis au contenu joint.';
+
+export interface PipelineDeps {
+  getConfig: () => BotConfig;
+  ai: AiService;
+  memory: SessionStore;
+  commands: CommandCatalog;
+  rateLimiter: RateLimiter;
+  logBus: LogBus;
+}
 
 /** Ce qui part à l'IA, avec ce qui en est gardé en mémoire. */
 interface Question {
@@ -72,34 +84,30 @@ export class MessagePipeline {
   /** Identifiants déjà traités, du plus ancien au plus récent. */
   readonly #seen = new Set<string>();
 
-  constructor(
-    private readonly getConfig: () => BotConfig,
-    private readonly ai: AiService,
-    private readonly memory: SessionStore,
-    private readonly commands: CommandCatalog,
-    private readonly logBus: LogBus,
-  ) {}
+  constructor(private readonly deps: PipelineDeps) {}
 
   /** Ne lève jamais : les erreurs sont journalisées. */
   async handle(message: IncomingMessage, transport: Transport): Promise<void> {
     if (this.#alreadySeen(message.id)) return;
-    const config = this.getConfig();
+    const config = this.deps.getConfig();
     const trigger = extractTrigger(message, config);
     if (!trigger) return;
 
     const where = message.isDM ? 'en MP' : `dans #${message.channelName}`;
     const hasContent = message.attachments.length > 0 || message.isReply;
-    const call = trigger.viaPrefix ? matchCommand(trigger.text, this.commands) : null;
+    const call = trigger.viaPrefix ? matchCommand(trigger.text, this.deps.commands) : null;
+    const isHelp = !call && trigger.text === '' && !hasContent;
+    if (!isHelp && !(await this.#withinQuota(message, transport, config))) return;
 
     if (call) {
       const { command, argument } = call;
       const invocation = `${config.prefix}${command.name}`;
-      this.logBus.push('command', `@${message.author.displayName} ${where} : ${invocation}`);
+      this.deps.logBus.push('command', `@${message.author.displayName} ${where} : ${invocation}`);
       if (command.type === 'static') {
         const values = {
           prefix: config.prefix,
           user: message.author.displayName,
-          commands: this.commands.enabled(),
+          commands: this.deps.commands.enabled(),
         };
         await this.#send(transport, expandStatic(command.response, values), message);
         return;
@@ -117,11 +125,11 @@ export class MessagePipeline {
       return;
     }
 
-    if (trigger.text === '' && !hasContent) {
-      await this.#send(transport, helpMessage(config, this.commands.enabled()), message);
+    if (isHelp) {
+      await this.#send(transport, helpMessage(config, this.deps.commands.enabled()), message);
       return;
     }
-    this.logBus.push(
+    this.deps.logBus.push(
       message.isDM ? 'dm' : 'discord',
       `@${message.author.displayName} ${where} : « ${preview(trigger.text || '(sans texte)')} »`,
     );
@@ -149,22 +157,22 @@ export class MessagePipeline {
     try {
       context = await gatherContext(message, query, transport);
       for (const failure of context.failures)
-        this.logBus.push('system', `Contenu ignoré : ${failure}`);
-      const history = config.memoryEnabled ? this.memory.history(session.id, retentionMs) : [];
-      answer = await this.ai.generate({
+        this.deps.logBus.push('system', `Contenu ignoré : ${failure}`);
+      const history = config.memoryEnabled ? this.deps.memory.history(session.id, retentionMs) : [];
+      answer = await this.deps.ai.generate({
         model: config.model,
         systemPrompt: systemPrompt(question.persona, message, context.images),
         history,
         prompt: buildPrompt(query, context),
         images: context.images,
       });
-      this.logBus.push(
+      this.deps.logBus.push(
         'ai',
         `${config.model} : réponse en ${((Date.now() - startedAt) / 1000).toFixed(1)} s${describeContext(history.length, context)}.`,
       );
     } catch (error) {
       const reason = error instanceof AiError ? error.message : `Erreur IA : ${String(error)}`;
-      this.logBus.push('error', reason);
+      this.deps.logBus.push('error', reason);
       await this.#send(transport, AI_FAILURE_REPLY, message);
       return;
     } finally {
@@ -172,7 +180,7 @@ export class MessagePipeline {
     }
 
     if (config.memoryEnabled) {
-      this.memory.append(
+      this.deps.memory.append(
         session,
         [
           { role: 'user', text: memoryText(question.memoryText, context) },
@@ -182,8 +190,42 @@ export class MessagePipeline {
       );
     }
     if (await this.#send(transport, answer, message)) {
-      this.logBus.push('success', `Réponse envoyée à @${message.author.displayName} ${where}.`);
+      this.deps.logBus.push(
+        'success',
+        `Réponse envoyée à @${message.author.displayName} ${where}.`,
+      );
     }
+  }
+
+  /** Applique le quota, sauf aux personnes exemptées ; prévient une fois la personne bloquée. */
+  async #withinQuota(
+    message: IncomingMessage,
+    transport: Transport,
+    config: BotConfig,
+  ): Promise<boolean> {
+    if (!config.rateLimitEnabled) return true;
+    const { author } = message;
+    if (config.bypassUsers.some((entry) => entry === author.id || entry === author.username)) {
+      return true;
+    }
+    if (await transport.isExempt(config.bypassRoleIds).catch(() => false)) return true;
+
+    const windowMs = config.rateLimitWindowSeconds * 1000;
+    const result = this.deps.rateLimiter.hit(author.id, config.rateLimitMaxRequests, windowMs);
+    if (result.allowed) return true;
+    if (result.firstBlock) {
+      const seconds = Math.ceil(result.retryInMs / 1000);
+      const quota = `${config.rateLimitMaxRequests} question(s) par ${config.rateLimitWindowSeconds} s`;
+      this.deps.logBus.push(
+        'cooldown',
+        `@${author.displayName} a atteint le quota (${quota}) : ignoré pendant ${seconds} s.`,
+      );
+      if (config.rateLimitNotify) {
+        const notice = `⏳ Limite atteinte : ${quota}. Réessayez dans ${seconds} s.`;
+        await this.#send(transport, notice, message);
+      }
+    }
+    return false;
   }
 
   async #send(transport: Transport, text: string, message: IncomingMessage): Promise<boolean> {
@@ -192,7 +234,10 @@ export class MessagePipeline {
       return true;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      this.logBus.push('error', `Envoi impossible à @${message.author.displayName} : ${reason}`);
+      this.deps.logBus.push(
+        'error',
+        `Envoi impossible à @${message.author.displayName} : ${reason}`,
+      );
       return false;
     }
   }

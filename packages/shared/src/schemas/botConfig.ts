@@ -17,41 +17,86 @@ export const SYSTEM_PROMPT_MAX_LENGTH = 8000;
 /** Format des identifiants Discord (snowflakes). */
 export const discordIdSchema = z.string().regex(/^\d{17,20}$/, 'Identifiant Discord invalide.');
 
-export const botConfigSchema = z.object({
-  triggerMode: z.enum(TRIGGER_MODES),
-  prefix: z
-    .string()
-    .trim()
-    .min(1, 'Préfixe requis.')
-    .max(5, 'Préfixe : 5 caractères maximum.')
-    .regex(/^\S+$/, "Le préfixe ne peut pas contenir d'espace."),
-  channelMode: z.enum(CHANNEL_MODES),
-  /** Salons autorisés en mode `whitelist` ; un fil suit son salon parent. */
-  allowedChannelIds: z.array(discordIdSchema).max(200),
-  allowDMs: z.boolean(),
-  model: z
-    .string()
-    .trim()
-    .regex(/^[\w.-]{1,100}$/, 'Nom de modèle invalide.'),
-  systemPrompt: z
-    .string()
-    .trim()
-    .min(1, 'Persona requis.')
-    .max(SYSTEM_PROMPT_MAX_LENGTH, `Persona : ${SYSTEM_PROMPT_MAX_LENGTH} caractères maximum.`),
-  memoryEnabled: z.boolean(),
-  /** Durée d'inactivité au bout de laquelle une conversation est oubliée. */
-  memoryRetentionMinutes: z
-    .number()
-    .int()
-    .min(5, 'Rétention : 5 minutes minimum.')
-    .max(1440, 'Rétention : 24 heures maximum.'),
-  /** Messages conservés par conversation, ceux de l'utilisateur et du bot confondus. */
-  memoryMaxMessages: z
-    .number()
-    .int()
-    .min(4, 'Mémoire : 4 messages minimum.')
-    .max(20, 'Mémoire : 20 messages maximum.'),
-});
+/** `@Pseudo` est rangé en `pseudo` : les noms d'utilisateur Discord sont en minuscules. */
+export const bypassUserSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .transform((value) => value.replace(/^@/, ''))
+  .pipe(
+    z
+      .string()
+      .regex(
+        /^(\d{17,20}|[a-z0-9_.]{2,32})$/,
+        "Utilisateur : ID Discord ou nom d'utilisateur (2 à 32 caractères parmi a-z, 0-9, « _ » et « . »).",
+      ),
+  );
+
+export const botConfigSchema = z
+  .object({
+    triggerMode: z.enum(TRIGGER_MODES),
+    prefix: z
+      .string()
+      .trim()
+      .min(1, 'Préfixe requis.')
+      .max(5, 'Préfixe : 5 caractères maximum.')
+      .regex(/^\S+$/, "Le préfixe ne peut pas contenir d'espace."),
+    channelMode: z.enum(CHANNEL_MODES),
+    /** Salons autorisés en mode `whitelist` ; un fil suit son salon parent. */
+    allowedChannelIds: z.array(discordIdSchema).max(200),
+    allowDMs: z.boolean(),
+    model: z
+      .string()
+      .trim()
+      .regex(/^[\w.-]{1,100}$/, 'Nom de modèle invalide.'),
+    systemPrompt: z
+      .string()
+      .trim()
+      .min(1, 'Persona requis.')
+      .max(SYSTEM_PROMPT_MAX_LENGTH, `Persona : ${SYSTEM_PROMPT_MAX_LENGTH} caractères maximum.`),
+    memoryEnabled: z.boolean(),
+    /** Durée d'inactivité au bout de laquelle une conversation est oubliée. */
+    memoryRetentionMinutes: z
+      .number()
+      .int()
+      .min(5, 'Rétention : 5 minutes minimum.')
+      .max(1440, 'Rétention : 24 heures maximum.'),
+    /** Messages conservés par conversation, ceux de l'utilisateur et du bot confondus. */
+    memoryMaxMessages: z
+      .number()
+      .int()
+      .min(4, 'Mémoire : 4 messages minimum.')
+      .max(20, 'Mémoire : 20 messages maximum.'),
+    rateLimitEnabled: z.boolean(),
+    /** Questions autorisées par personne sur la période glissante `rateLimitWindowSeconds`. */
+    rateLimitMaxRequests: z
+      .number()
+      .int()
+      .min(1, 'Quota : 1 question minimum.')
+      .max(50, 'Quota : 50 questions maximum.'),
+    rateLimitWindowSeconds: z
+      .number()
+      .int()
+      .min(5, 'Période : 5 secondes minimum.')
+      .max(3600, 'Période : 1 heure maximum.'),
+    /** Prévenir une fois la personne bloquée, plutôt que l'ignorer en silence. */
+    rateLimitNotify: z.boolean(),
+    /** Les propriétaires de serveur sont toujours exemptés, en plus de ces rôles. */
+    bypassRoleIds: z.array(discordIdSchema).max(100),
+    /** ID ou nom d'utilisateur Discord (unique), jamais le pseudo d'affichage. */
+    bypassUsers: z.array(bypassUserSchema).max(100),
+    dmRelayEnabled: z.boolean(),
+    dmRelayChannelId: discordIdSchema.nullable(),
+  })
+  .superRefine((config, ctx) => {
+    if (config.dmRelayEnabled && !config.dmRelayChannelId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dmRelayChannelId'],
+        message: 'Choisissez le salon de retranscription des MP.',
+      });
+    }
+  });
 export type BotConfig = z.infer<typeof botConfigSchema>;
 
 export const aiModelSchema = z.object({ id: z.string(), label: z.string() });
@@ -101,4 +146,12 @@ export const DEFAULT_BOT_CONFIG: BotConfig = {
   memoryEnabled: true,
   memoryRetentionMinutes: 30,
   memoryMaxMessages: 10,
+  rateLimitEnabled: false,
+  rateLimitMaxRequests: 3,
+  rateLimitWindowSeconds: 60,
+  rateLimitNotify: true,
+  bypassRoleIds: [],
+  bypassUsers: [],
+  dmRelayEnabled: false,
+  dmRelayChannelId: null,
 };

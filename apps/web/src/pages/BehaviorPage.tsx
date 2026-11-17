@@ -1,28 +1,25 @@
 import {
   aiModelSchema,
-  discordIdSchema,
+  bypassUserSchema,
   PERSONA_PRESETS,
   SYSTEM_PROMPT_MAX_LENGTH,
   TRIGGER_MODE_LABELS,
   TRIGGER_MODES,
   type BotConfig,
-  type DiscoveredGuild,
 } from '@bot/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Choice } from '@/components/Choice';
-import { Badge } from '@/components/ui/badge';
+import { ChannelSelect, DiscoveryPicker, RemovableBadge } from '@/components/DiscoveryPicker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { useRealtime } from '@/hooks/useRealtime';
-import { apiGet, apiSend, botDiscoveryQuery, configQuery } from '@/lib/api';
+import { apiGet, apiSend, configQuery } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const RETENTION_CHOICES = [
@@ -96,10 +93,18 @@ function BehaviorForm({ saved }: { saved: BotConfig }) {
           onChange={(channelMode) => set({ channelMode })}
         />
         {draft.channelMode === 'whitelist' && (
-          <ChannelPicker
-            selected={draft.allowedChannelIds}
-            onChange={(allowedChannelIds) => set({ allowedChannelIds })}
-          />
+          <>
+            <DiscoveryPicker
+              kind="channel"
+              selected={draft.allowedChannelIds}
+              onChange={(allowedChannelIds) => set({ allowedChannelIds })}
+            />
+            {draft.allowedChannelIds.length === 0 && (
+              <p className="text-sm text-amber-300">
+                Aucun salon sélectionné : le bot ne répondra sur aucun serveur.
+              </p>
+            )}
+          </>
         )}
       </Section>
 
@@ -166,6 +171,93 @@ function BehaviorForm({ saved }: { saved: BotConfig }) {
         </Hint>
       </Section>
 
+      <Section
+        title="Limitation de fréquence"
+        description="Empêche une personne de monopoliser le bot ou d'épuiser le quota Gemini."
+      >
+        <div className="flex items-center gap-3">
+          <Switch
+            id="rateLimitEnabled"
+            checked={draft.rateLimitEnabled}
+            onCheckedChange={(rateLimitEnabled) => set({ rateLimitEnabled })}
+          />
+          <Label htmlFor="rateLimitEnabled">Limiter le nombre de questions par personne</Label>
+        </div>
+        {draft.rateLimitEnabled && (
+          <>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Input
+                aria-label="Questions autorisées"
+                type="number"
+                className="w-20"
+                min={1}
+                max={50}
+                value={draft.rateLimitMaxRequests}
+                onChange={(event) => set({ rateLimitMaxRequests: Number(event.target.value) })}
+              />
+              question(s) au plus par période de
+              <Input
+                aria-label="Durée de la période en secondes"
+                type="number"
+                className="w-24"
+                min={5}
+                max={3600}
+                value={draft.rateLimitWindowSeconds}
+                onChange={(event) => set({ rateLimitWindowSeconds: Number(event.target.value) })}
+              />
+              secondes.
+            </div>
+            <Choice
+              label="Au-delà du quota"
+              value={draft.rateLimitNotify ? 'notify' : 'silent'}
+              options={[
+                { value: 'notify', label: 'Prévenir une fois (temps restant)' },
+                { value: 'silent', label: 'Ignorer en silence' },
+              ]}
+              onChange={(choice) => set({ rateLimitNotify: choice === 'notify' })}
+            />
+            <div className="grid gap-2">
+              <Label>Rôles exemptés</Label>
+              <Hint>Les propriétaires de serveur sont toujours exemptés.</Hint>
+              <DiscoveryPicker
+                kind="role"
+                selected={draft.bypassRoleIds}
+                onChange={(bypassRoleIds) => set({ bypassRoleIds })}
+              />
+            </div>
+            <UserList value={draft.bypassUsers} onChange={(bypassUsers) => set({ bypassUsers })} />
+          </>
+        )}
+      </Section>
+
+      <Section
+        title="Retranscription des MP"
+        description="Recopie les MP reçus par le bot, et ses réponses, dans un salon du staff."
+      >
+        <div className="flex items-center gap-3">
+          <Switch
+            id="dmRelayEnabled"
+            checked={draft.dmRelayEnabled}
+            onCheckedChange={(dmRelayEnabled) => set({ dmRelayEnabled })}
+          />
+          <Label htmlFor="dmRelayEnabled">Retranscrire les MP</Label>
+        </div>
+        {draft.dmRelayEnabled && (
+          <div className="grid gap-2">
+            <Label htmlFor="dmRelayChannel">Salon de destination</Label>
+            <ChannelSelect
+              id="dmRelayChannel"
+              value={draft.dmRelayChannelId}
+              onChange={(dmRelayChannelId) => set({ dmRelayChannelId })}
+            />
+            <Hint>
+              Les messages recopiés ne notifient personne. Les membres ne savent pas que leurs MP
+              sont lus par le staff : indiquez-le, par exemple dans la description du bot.
+            </Hint>
+          </div>
+        )}
+      </Section>
+
       <Section title="Intelligence artificielle">
         <ModelSelect value={draft.model} onChange={(model) => set({ model })} />
         <PersonaEditor
@@ -206,103 +298,55 @@ function Hint({ children }: { children: ReactNode }) {
   return <p className="text-muted-foreground text-xs">{children}</p>;
 }
 
-function ChannelPicker(props: { selected: string[]; onChange: (ids: string[]) => void }) {
-  const online = useRealtime().bot?.state === 'online';
-  const guilds = useQuery({ ...botDiscoveryQuery, enabled: online }).data ?? [];
-  const [manual, setManual] = useState('');
+function UserList(props: { value: string[]; onChange: (users: string[]) => void }) {
+  const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  const known = new Set(guilds.flatMap((guild) => guild.channels.map((channel) => channel.id)));
-  const unknown = props.selected.filter((id) => !known.has(id));
-  const toggle = (id: string, checked: boolean) =>
-    props.onChange(checked ? [...props.selected, id] : props.selected.filter((s) => s !== id));
-
-  const addManual = () => {
-    const result = resolveChannel(manual, guilds);
-    setError(result.error ?? null);
-    if (result.id && !props.selected.includes(result.id))
-      props.onChange([...props.selected, result.id]);
-    if (result.id) setManual('');
+  const add = () => {
+    const parsed = bypassUserSchema.safeParse(input);
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Valeur invalide.');
+    setError(null);
+    setInput('');
+    if (!props.value.includes(parsed.data)) props.onChange([...props.value, parsed.data]);
   };
 
   return (
-    <div className="grid gap-4">
-      {!online && (
-        <Hint>Démarrez le bot pour choisir parmi ses salons, ou ajoutez-les par leur ID.</Hint>
-      )}
-      {guilds.map((guild) => (
-        <fieldset key={guild.id} className="grid gap-1">
-          <legend className="mb-1 text-sm font-medium">{guild.name}</legend>
-          <div className="grid gap-1 sm:grid-cols-2">
-            {guild.channels.map((channel) => (
-              <label key={channel.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="accent-primary size-4"
-                  checked={props.selected.includes(channel.id)}
-                  onChange={(event) => toggle(channel.id, event.target.checked)}
-                />
-                #{channel.name}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      ))}
-
-      {unknown.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="text-muted-foreground text-xs">
-            {online ? 'Salons introuvables :' : 'Salons sélectionnés :'}
-          </span>
-          {unknown.map((id) => (
-            <Badge key={id} variant="outline" className="font-mono">
-              {id}
-              <button type="button" aria-label={`Retirer ${id}`} onClick={() => toggle(id, false)}>
-                <X />
-              </button>
-            </Badge>
+    <div className="grid gap-2">
+      <Label htmlFor="bypassUser">Utilisateurs exemptés</Label>
+      <Hint>
+        Par ID ou nom d'utilisateur Discord (@pseudo unique), jamais par pseudo d'affichage, que
+        chacun peut modifier.
+      </Hint>
+      {props.value.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {props.value.map((user) => (
+            <RemovableBadge
+              key={user}
+              label={user}
+              onRemove={() => props.onChange(props.value.filter((u) => u !== user))}
+            />
           ))}
         </div>
       )}
-
       <form
         className="flex gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          addManual();
+          add();
         }}
       >
         <Input
-          aria-label="Ajouter un salon par ID ou par nom"
-          placeholder="ID ou nom du salon"
-          value={manual}
-          onChange={(event) => setManual(event.target.value)}
+          id="bypassUser"
+          placeholder="ID ou @pseudo"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
         />
-        <Button type="submit" variant="outline" disabled={!manual.trim()}>
+        <Button type="submit" variant="outline" disabled={!input.trim()}>
           Ajouter
         </Button>
       </form>
       {error && <p className="text-destructive text-sm">{error}</p>}
-      {props.selected.length === 0 && (
-        <p className="text-sm text-amber-300">
-          Aucun salon sélectionné : le bot ne répondra sur aucun serveur.
-        </p>
-      )}
     </div>
   );
-}
-
-function resolveChannel(input: string, guilds: DiscoveredGuild[]): { id?: string; error?: string } {
-  const value = input.trim().replace(/^#/, '');
-  if (discordIdSchema.safeParse(value).success) return { id: value };
-  const matches = guilds.flatMap((guild) =>
-    guild.channels.filter((channel) => channel.name.toLowerCase() === value.toLowerCase()),
-  );
-  if (matches.length === 1) return { id: matches[0]?.id };
-  if (matches.length > 1) {
-    return { error: `Plusieurs salons s'appellent « ${value} » : cochez le bon dans la liste.` };
-  }
-  return { error: `Aucun salon « ${value} » parmi ceux que voit le bot.` };
 }
 
 function ModelSelect(props: { value: string; onChange: (model: string) => void }) {

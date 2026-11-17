@@ -1,5 +1,5 @@
 import { DISCORD_MAX_MESSAGE_LENGTH } from '@bot/shared';
-import { cleanContent, type Message } from 'discord.js';
+import { cleanContent, type Guild, type Message } from 'discord.js';
 import type {
   Attachment,
   IncomingMessage,
@@ -42,16 +42,39 @@ export function toIncomingMessage(message: Message, botId: string): IncomingMess
   };
 }
 
-export function discordTransport(message: Message, botId: string): Transport {
+/** `onReplied` reçoit chaque réponse envoyée (retranscription des MP). */
+export function discordTransport(
+  message: Message,
+  botId: string,
+  onReplied?: (text: string) => void,
+): Transport {
   return {
     async reply(text) {
       // Le texte vient de l'IA : il ne doit notifier personne, sauf l'auteur de la question.
       const [first = '', ...rest] = chunkText(text, DISCORD_MAX_MESSAGE_LENGTH);
       await message.reply({ content: first, allowedMentions: { parse: [], repliedUser: true } });
-      if (!message.channel.isSendable()) return;
-      for (const chunk of rest) {
-        await message.channel.send({ content: chunk, allowedMentions: { parse: [] } });
+      if (message.channel.isSendable()) {
+        for (const chunk of rest) {
+          await message.channel.send({ content: chunk, allowedMentions: { parse: [] } });
+        }
       }
+      onReplied?.(text);
+    },
+    async isExempt(roleIds) {
+      const { guild, member, author } = message;
+      if (guild) {
+        return guild.ownerId === author.id || roleIds.some((id) => member?.roles.cache.has(id));
+      }
+      // En MP : propriétaire d'un serveur commun, ou rôle exempté sur le serveur qui le définit.
+      const guilds = [...message.client.guilds.cache.values()];
+      if (guilds.some((candidate) => candidate.ownerId === author.id)) return true;
+      for (const candidate of guilds) {
+        const wanted = roleIds.filter((id) => candidate.roles.cache.has(id));
+        if (wanted.length === 0) continue;
+        const roles = await memberRoles(candidate, author.id);
+        if (wanted.some((id) => roles.has(id))) return true;
+      }
+      return false;
     },
     startTyping() {
       const { channel } = message;
@@ -72,6 +95,23 @@ export function discordTransport(message: Message, botId: string): Transport {
       };
     },
   };
+}
+
+const ROLES_CACHE_MS = 5 * 60_000;
+const rolesCache = new Map<string, { roles: Set<string>; expiresAt: number }>();
+
+/**
+ * Rôles d'une personne sur un serveur, demandés à Discord puis gardés 5 minutes : sans l'intent
+ * privilégié « membres », le cache de discord.js n'est pas tenu à jour.
+ */
+async function memberRoles(guild: Guild, userId: string): Promise<Set<string>> {
+  const key = `${guild.id}:${userId}`;
+  const cached = rolesCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.roles;
+  const member = await guild.members.fetch({ user: userId, force: true }).catch(() => null);
+  const roles = new Set(member ? member.roles.cache.keys() : []);
+  rolesCache.set(key, { roles, expiresAt: Date.now() + ROLES_CACHE_MS });
+  return roles;
 }
 
 function toAttachments(message: Message): Attachment[] {

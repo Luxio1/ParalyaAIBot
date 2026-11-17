@@ -47,6 +47,23 @@ describe('routes /api/config et /api/ai/models', () => {
     expect(response.json().message).toBe("Le préfixe ne peut pas contenir d'espace.");
   });
 
+  it('exige un salon pour la retranscription des MP', async () => {
+    const response = await putConfig({ ...DEFAULT_BOT_CONFIG, dmRelayEnabled: true });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().message).toBe('Choisissez le salon de retranscription des MP.');
+  });
+
+  it('range les utilisateurs exemptés par leur nom en minuscules, sans @', async () => {
+    await putConfig({ ...DEFAULT_BOT_CONFIG, bypassUsers: ['@Alice', '200000000000000001'] });
+    expect((await get('/api/config')).json().bypassUsers).toEqual(['alice', '200000000000000001']);
+
+    const invalid = await putConfig({
+      ...DEFAULT_BOT_CONFIG,
+      bypassUsers: ['Pseudo avec espaces'],
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
+
   it('liste les modèles disponibles', async () => {
     expect((await get('/api/ai/models')).json()).toEqual([
       { id: 'gemini-test', label: 'Gemini Test' },

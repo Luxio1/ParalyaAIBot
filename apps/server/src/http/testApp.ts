@@ -5,6 +5,7 @@ import { AiService } from '../core/ai/aiService';
 import { FakeAiProvider } from '../core/ai/fakeAiProvider';
 import { LogBus } from '../core/logs/logBus';
 import { SessionStore } from '../core/memory/sessionStore';
+import { RateLimiter } from '../core/ratelimit/rateLimiter';
 import { MessagePipeline } from '../core/pipeline/messagePipeline';
 import { openDatabase, type DatabaseHandle } from '../db/client';
 import { runMigrations } from '../db/migrate';
@@ -54,8 +55,17 @@ export async function createTestApp(
   const ai = new AiService(aiProvider);
   const memory = new SessionStore();
   const commands = new CommandService(database.db, logBus);
-  const pipeline = new MessagePipeline(() => config.get(), ai, memory, commands, logBus);
-  const bot = new BotManager(database.db, secrets, logBus, pipeline, discord.createClient);
+  const getConfig = () => config.get();
+  const rateLimiter = new RateLimiter();
+  const pipeline = new MessagePipeline({ getConfig, ai, memory, commands, rateLimiter, logBus });
+  const bot = new BotManager(
+    database.db,
+    secrets,
+    logBus,
+    pipeline,
+    getConfig,
+    discord.createClient,
+  );
   const app = await buildApp({
     env,
     database,
