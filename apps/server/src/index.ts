@@ -1,8 +1,11 @@
 import { APP_NAME, APP_VERSION } from '@bot/shared';
+import { LogBus } from './core/logs/logBus';
 import { openDatabase } from './db/client';
 import { runMigrations } from './db/migrate';
 import { EnvError, findRootDir, loadDotEnv, parseEnv } from './env';
 import { buildApp } from './http/app';
+import { AuthService } from './services/authService';
+import { SecretsService } from './services/secretsService';
 
 async function main(): Promise<void> {
   const rootDir = findRootDir();
@@ -12,7 +15,15 @@ async function main(): Promise<void> {
   const database = openDatabase(env.databaseFile);
   runMigrations(database.db);
 
-  const app = await buildApp({ env, database });
+  const logBus = new LogBus();
+  const auth = new AuthService(database.db, logBus);
+  const secrets = new SecretsService(
+    database.db,
+    env.appSecret,
+    { geminiApiKey: env.geminiApiKey },
+    logBus,
+  );
+  const app = await buildApp({ env, database, logBus, auth, secrets });
   app.log.info(`${APP_NAME} v${APP_VERSION}, base de données : ${env.databaseFile}`);
 
   let closing = false;
@@ -31,6 +42,15 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   await app.listen({ host: env.host, port: env.port });
+  logBus.push('system', `Serveur démarré (v${APP_VERSION}).`);
+
+  // Lisible uniquement par qui a accès aux logs du serveur, et invalide dès le premier compte créé.
+  const setupCode = auth.createSetupCode();
+  if (setupCode) {
+    app.log.warn(
+      `Aucun compte administrateur. Ouvrez le dashboard et saisissez ce code d'installation : ${setupCode}`,
+    );
+  }
 }
 
 main().catch((error: unknown) => {

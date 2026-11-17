@@ -75,10 +75,10 @@ ParalyaAIBot/
 
 ## 4. Jalons
 - [x] **J0 Fondations** *(terminé le 2026-11-16 ; `docker compose up` reste à vérifier, Docker absent du poste de dev)* — monorepo, TS strict, ESLint/Prettier, `packages/shared`, Drizzle + migrations, env validé, Dockerfile, debug VS Code. *Validation : `pnpm dev` et `docker compose up` démarrent.*
-- [ ] **J1 Sécurité & config** — auth, secrets chiffrés, `ConfigService` + API CRUD, WebSocket, LogBus + console live, `safeFetch`. *Validation : dashboard protégé, config persistée après redémarrage, aucun secret dans les réponses API.*
+- [x] **J1 Sécurité & config** — auth, secrets chiffrés, API secrets, WebSocket, LogBus + console live. *Validation : dashboard protégé, config persistée après redémarrage, aucun secret dans les réponses API.*
 - [ ] **J2 Cycle de vie du bot** — `BotManager` start/stop/hot-apply, statut temps réel, découverte serveurs/salons/rôles, lien OAuth2, autostart. *Validation : bot piloté depuis l'UI, config modifiée sans reconnexion.*
 - [ ] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
-- [ ] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens. *Validation : conversation suivie, image et lien analysés.*
+- [ ] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
 - [ ] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
 - [ ] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
 - [ ] **J7 Moteur d'événements** — règles, évaluation groupée (modèle rapide configurable), filtres, cooldowns, actions, variables, anti-doublon, testeur.
@@ -97,3 +97,17 @@ ParalyaAIBot/
 - **pnpm 12** : les scripts d'installation autorisés sont listés dans `allowBuilds` (`pnpm-workspace.yaml`).
 - **Docker** : image `node:22-slim` multi-étapes, utilisateur non-root, `HEALTHCHECK` sur `/healthz`. L'étape `pnpm deploy --prod --legacy` a été vérifiée localement ; **le build de l'image lui-même n'a pas pu être testé** (Docker non installé). À faire dès que Docker est disponible, au plus tard en J9.
 - **Reporté à J1** : en-têtes de sécurité (`@fastify/helmet`, CSP), auth, tables de configuration et de secrets.
+
+### J1 Sécurité & config (2026-11-16)
+- **`safeFetch` déplacé en J4**, avec la lecture de liens et d'images qui en est le premier appelant. La règle de sécurité du CLAUDE.md reste inchangée.
+- **Pas de table de configuration générique** : seuls les secrets sont persistés en J1. Chaque groupe de réglages du bot aura sa table au jalon qui l'utilise (J2, J3...).
+- **Premier compte** : tant qu'aucun admin n'existe, le serveur écrit dans ses logs un code d'installation à usage unique (12 caractères, régénéré à chaque démarrage), exigé par `POST /api/auth/setup`. Sans lui, la première personne qui atteint un serveur fraîchement déployé pourrait s'approprier le dashboard.
+- **Mots de passe** : argon2id via `@node-rs/argon2` (binaire précompilé, paramètres par défaut conformes à l'OWASP), 12 caractères minimum. Un identifiant inconnu coûte un hash comme un vrai pour ne pas révéler les comptes par le temps de réponse.
+- **Sessions** : jeton aléatoire de 256 bits dans un cookie `HttpOnly`, `SameSite=Strict`, `Secure` seulement si la requête arrive en HTTPS (sinon le dashboard serait inutilisable sur un VPS sans certificat). Seul le SHA-256 du jeton est stocké. Expiration après 7 jours d'inactivité, 30 jours au maximum. Changer le mot de passe ferme les autres sessions ; le WebSocket revérifie sa session chaque minute.
+- **Anti-CSRF** : `SameSite=Strict` plus refus (403) de toute requête modifiante ou connexion WebSocket dont l'en-tête `Origin` ne correspond pas à l'hôte. Sans `Origin` (curl, scripts), la requête passe.
+- **Anti-bruteforce** : 5 tentatives par minute et par IP sur `setup`, `login` et `password` (`@fastify/rate-limit`). Derrière un reverse proxy, `TRUST_PROXY=true` est nécessaire pour voir la vraie IP.
+- **Secrets** : AES-256-GCM, clé dérivée d'`APP_SECRET` par HKDF-SHA256, IV aléatoire, nom du secret en donnée authentifiée (un chiffré copié vers une autre ligne ne se déchiffre pas). Déchiffrés une fois au démarrage et gardés en mémoire ; un secret illisible (APP_SECRET changé) est signalé dans la console et considéré comme absent. L'API n'expose que `{ isSet, last4, source }`. `GEMINI_API_KEY` du `.env` sert de repli (`source: "env"`).
+- **Helmet** : CSP par défaut sans `upgrade-insecure-requests` (même raison que `Secure`).
+- **Logs de la console** : en mémoire uniquement (500 entrées), perdus au redémarrage. Le client reçoit `logs:snapshot` à la connexion puis chaque `log` ; pas de route `GET /api/logs`.
+- **Validation Zod en français** (`zod/locales`), configurée dans `packages/shared` pour le serveur et le dashboard.
+- **Dashboard** : React Router 8, composants shadcn/ui réduits aux modules Radix utilisés (`@radix-ui/react-slot`, `@radix-ui/react-label`) ; le paquet `radix-ui` complet tirait une dépendance manquante (`tslib`). Thème sombre unique.

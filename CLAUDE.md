@@ -22,7 +22,7 @@ Refonte complète d'un bot Discord propulsé par l'IA, piloté par un dashboard 
 
 ## Règles de sécurité (non négociables)
 - Les secrets (token Discord, clés IA) sont chiffrés en base (AES-256-GCM, clé `APP_SECRET`) et **ne sont jamais renvoyés au front** (uniquement un masque `••••1234`).
-- Toutes les routes `/api/**` et le WebSocket exigent une session authentifiée (sauf `/api/auth/*` et `/healthz`).
+- Toutes les routes `/api/**` et le WebSocket exigent une session authentifiée (sauf `/healthz` et `/api/auth/{state,setup,login,logout}`).
 - Toute requête sortante vers une URL fournie par un utilisateur passe par `lib/safeFetch` (blocage IP privées/loopback/link-local, y compris après résolution DNS et redirections ; timeout ; taille max ; MIME filtrés).
 - Les médias et liens ne sont téléchargés **qu'après** avoir décidé que le bot prend en charge le message.
 - Ne jamais logger un secret.

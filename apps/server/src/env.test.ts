@@ -15,6 +15,14 @@ describe('parseEnv', () => {
     expect(env.dataDir).toBe(join(ROOT, 'data'));
     expect(env.databaseFile).toBe(join(ROOT, 'data', 'bot.db'));
     expect(env.geminiApiKey).toBeUndefined();
+    expect(env.trustProxy).toBe(false);
+  });
+
+  it('lit TRUST_PROXY comme un booléen', () => {
+    expect(parseEnv({ APP_SECRET: SECRET, TRUST_PROXY: 'true' }, ROOT).trustProxy).toBe(true);
+    expect(() => parseEnv({ APP_SECRET: SECRET, TRUST_PROXY: 'peut-être' }, ROOT)).toThrow(
+      /TRUST_PROXY/,
+    );
   });
 
   it('traite les variables vides comme absentes', () => {
@@ -40,7 +48,7 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ APP_SECRET: SECRET, PORT: '70000' }, ROOT)).toThrow(/PORT/);
   });
 
-  it('n’inclut jamais la valeur du secret dans le message d’erreur', () => {
+  it("n'inclut jamais la valeur du secret dans le message d'erreur", () => {
     try {
       parseEnv({ APP_SECRET: 'secret-court' }, ROOT);
       expect.unreachable();

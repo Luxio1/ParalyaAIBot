@@ -42,7 +42,7 @@ export default tseslint.config(
             {
               group: ['discord.js', 'discord.js/*', '@discordjs/*', 'fastify', '@fastify/*'],
               message:
-                'core/ ne doit dépendre ni de discord.js ni de Fastify : passer par l’interface Transport.',
+                "core/ ne doit dépendre ni de discord.js ni de Fastify : passer par l'interface Transport.",
             },
             {
               group: ['**/adapters/**', '**/http/**'],

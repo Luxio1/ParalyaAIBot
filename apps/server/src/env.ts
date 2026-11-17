@@ -19,6 +19,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   GEMINI_API_KEY: optionalString,
   WEB_DIST_DIR: optionalString,
+  TRUST_PROXY: z.stringbool().default(false),
 });
 
 export interface Env {
@@ -34,13 +35,15 @@ export interface Env {
   /** Utilisée seulement si aucune clé n'est enregistrée dans le dashboard. */
   geminiApiKey: string | undefined;
   webDistDir: string;
+  /** Derrière un reverse proxy : IP réelle et HTTPS lus dans les en-têtes `X-Forwarded-*`. */
+  trustProxy: boolean;
 }
 
 export class EnvError extends Error {
   constructor(public readonly issues: string[]) {
     super(
       [
-        'Configuration invalide (variables d’environnement) :',
+        "Configuration invalide (variables d'environnement) :",
         ...issues.map((issue) => `  - ${issue}`),
         'Copiez « .env.example » en « .env » et complétez les valeurs.',
       ].join('\n'),
@@ -97,5 +100,6 @@ export function parseEnv(
     logLevel: raw.LOG_LEVEL,
     geminiApiKey: raw.GEMINI_API_KEY,
     webDistDir: toAbsolute(raw.WEB_DIST_DIR ?? 'apps/web/dist'),
+    trustProxy: raw.TRUST_PROXY,
   };
 }

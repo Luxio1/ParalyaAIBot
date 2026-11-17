@@ -6,7 +6,8 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
   // Le port de l'API est lu dans le `.env` de la racine (PORT), 3000 par défaut.
   const rootEnv = loadEnv(mode, fileURLToPath(new URL('../..', import.meta.url)), '');
-  const apiTarget = `http://127.0.0.1:${rootEnv.PORT || 3000}`;
+  // `changeOrigin: false` garde l'en-tête Host du navigateur : le serveur le compare à `Origin`.
+  const apiTarget = { target: `http://127.0.0.1:${rootEnv.PORT || 3000}`, changeOrigin: false };
 
   return {
     plugins: [react(), tailwindcss()],
@@ -18,7 +19,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': apiTarget,
         '/healthz': apiTarget,
-        '/ws': { target: apiTarget, ws: true },
+        '/ws': { ...apiTarget, ws: true },
       },
     },
   };
