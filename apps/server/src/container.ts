@@ -75,6 +75,7 @@ export function createContainer(options: ContainerOptions) {
     commands,
     eventRules,
     events,
+    pipeline,
     bot,
   };
 }

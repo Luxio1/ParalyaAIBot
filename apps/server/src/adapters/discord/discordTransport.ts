@@ -40,6 +40,8 @@ export function toIncomingMessage(message: Message, botId: string): IncomingMess
     repliesToBot: message.mentions.repliedUser?.id === botId,
     isReply: message.reference?.messageId !== undefined,
     attachments: toAttachments(message),
+    inlineImages: [],
+    isPlayground: false,
   };
 }
 

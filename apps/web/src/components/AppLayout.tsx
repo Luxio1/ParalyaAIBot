@@ -1,8 +1,10 @@
 import { APP_NAME } from '@bot/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  BookOpen,
   Bot,
   Brain,
+  FlaskConical,
   LogOut,
   Radar,
   Settings,
@@ -23,8 +25,10 @@ const NAV_ITEMS = [
   { to: '/commandes', label: 'Commandes', icon: SquareSlash },
   { to: '/evenements', label: 'Événements', icon: Radar },
   { to: '/memoire', label: 'Mémoire', icon: Brain },
+  { to: '/simulateur', label: 'Simulateur', icon: FlaskConical },
   { to: '/console', label: 'Console', icon: SquareTerminal },
   { to: '/parametres', label: 'Paramètres', icon: Settings },
+  { to: '/guide', label: 'Guide', icon: BookOpen },
 ];
 
 export function AppLayout() {

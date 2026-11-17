@@ -48,11 +48,13 @@ export async function gatherContext(
     Promise.allSettled(urls.slice(0, MAX_LINKS).map((url) => readLink(url))),
   ]);
 
-  const images: AiImage[] = [];
+  // Images fournies directement (simulateur), sans téléchargement.
+  const images: AiImage[] = message.inlineImages.slice(0, MAX_IMAGES);
   const pages: PageContent[] = [];
   imageResults.forEach((result, index) => {
-    if (result.status === 'fulfilled') images.push(result.value);
-    else failures.push(`pièce jointe ${usable[index]?.name} (${reason(result.reason)})`);
+    if (result.status === 'fulfilled') {
+      if (images.length < MAX_IMAGES) images.push(result.value);
+    } else failures.push(`pièce jointe ${usable[index]?.name} (${reason(result.reason)})`);
   });
   linkResults.forEach((result, index) => {
     if (result.status === 'rejected')

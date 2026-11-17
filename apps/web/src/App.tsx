@@ -11,8 +11,10 @@ import { BotPage } from '@/pages/BotPage';
 import { CommandsPage } from '@/pages/CommandsPage';
 import { EventsPage } from '@/pages/EventsPage';
 import { ConsolePage } from '@/pages/ConsolePage';
+import { GuidePage } from '@/pages/GuidePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { MemoryPage } from '@/pages/MemoryPage';
+import { PlaygroundPage } from '@/pages/PlaygroundPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { SetupPage } from '@/pages/SetupPage';
 
@@ -26,6 +28,8 @@ const router = createBrowserRouter([
       { path: 'commandes', element: <CommandsPage /> },
       { path: 'evenements', element: <EventsPage /> },
       { path: 'memoire', element: <MemoryPage /> },
+      { path: 'simulateur', element: <PlaygroundPage /> },
+      { path: 'guide', element: <GuidePage /> },
       { path: 'console', element: <ConsolePage /> },
       { path: 'parametres', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/bot" replace /> },

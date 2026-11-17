@@ -82,7 +82,7 @@ ParalyaAIBot/
 - [x] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
 - [x] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
 - [x] **J7 Moteur d'événements** — règles, évaluation groupée (modèle rapide configurable), filtres, cooldowns, actions, variables, anti-doublon, testeur.
-- [ ] **J8 Playground & Guide** — simulateur sur le pipeline commun, onglet Guide Developer Portal.
+- [x] **J8 Playground & Guide** — simulateur sur le pipeline commun, onglet Guide Developer Portal.
 - [ ] **J9 Durcissement & déploiement** — tests, import legacy, sauvegarde DB, README déploiement VPS/Railway/Fly, revue sécurité.
 
 ## 5. Journal des décisions
@@ -175,3 +175,10 @@ ParalyaAIBot/
 - **Anti-doublon** : l'action dans le salon d'origine est sautée quand le bot répond déjà au message (`extractTrigger`).
 - **Testeur** (`POST /api/events/test`) : toutes les règles, actives ou non, sans filtre ni délai ; aperçu des textes écrits à l'avance, les textes IA ne sont pas générés.
 - **`container.ts`** assemble les services pour `index.ts` et les tests (`createTestApp`), qui dupliquaient le câblage ; `dataBlock` et sa consigne sont partagés (`core/ai/promptData.ts`).
+
+### J8 Playground & Guide (2026-11-17)
+- **Même pipeline que Discord** : `adapters/playground/playground.ts` construit un `IncomingMessage` (`isPlayground`) et un `PlaygroundTransport` qui garde les réponses. Le simulateur s'adresse toujours au bot (comme un MP, préfixe et commandes compris), ignore la limitation de fréquence et le réglage des MP, et a une mémoire par pseudo (`playground:<pseudo>`, type « Simulateur » dans le moniteur).
+- **Images collées** : `IncomingMessage.inlineImages`, transmises telles quelles à l'IA sans téléchargement ni stockage. 3 images, 4 Mo, PNG, JPEG ou WebP ; seule `POST /api/playground/messages` accepte 20 Mo, les autres routes restent à 1 Mo.
+- **Événements** : analysés comme par le testeur (règles actives, sans filtre de salon ni délai, aucune action), seulement si l'interrupteur du simulateur est activé ; hors du budget par minute du moteur. Une erreur d'analyse n'empêche pas la réponse.
+- **Rendu Discord** (`components/DiscordMarkdown.tsx`) : moteur maison (gras, italique, souligné, barré, code, blocs, citations, titres, listes, liens http(s)) plutôt qu'une bibliothèque Markdown. Le texte de l'IA n'est jamais interprété comme du HTML (React l'échappe) ; testé, comme le refus des liens `javascript:`.
+- **Guide** : check-list cochée d'après l'état réel (secrets enregistrés, bot en ligne, au moins un serveur). Les intents sont considérés comme activés quand le bot est en ligne, puisque Discord refuse sinon la connexion.

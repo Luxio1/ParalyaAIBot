@@ -47,6 +47,13 @@ export interface IncomingMessage {
   /** Vrai si le message répond à un autre message (voir `Transport.fetchQuoted`). */
   isReply: boolean;
   attachments: Attachment[];
+  /** Images déjà chargées (simulateur) ; Discord passe par `attachments`. */
+  inlineImages: AiImage[];
+  /**
+   * Message du simulateur du dashboard : il s'adresse toujours au bot, sans quota ni réglage des
+   * MP, et a sa propre mémoire par pseudo.
+   */
+  isPlayground: boolean;
 }
 
 /** Moyen de répondre là où le message est arrivé. */
@@ -97,7 +104,8 @@ export class MessagePipeline {
     if (!trigger) return;
 
     const where = message.isDM ? 'en MP' : `dans #${message.channelName}`;
-    const hasContent = message.attachments.length > 0 || message.isReply;
+    const hasContent =
+      message.attachments.length > 0 || message.inlineImages.length > 0 || message.isReply;
     const call = trigger.viaPrefix ? matchCommand(trigger.text, this.deps.commands) : null;
     const isHelp = !call && trigger.text === '' && !hasContent;
     if (!isHelp && !(await this.#withinQuota(message, transport, config))) return;
@@ -206,7 +214,7 @@ export class MessagePipeline {
     transport: Transport,
     config: BotConfig,
   ): Promise<boolean> {
-    if (!config.rateLimitEnabled) return true;
+    if (!config.rateLimitEnabled || message.isPlayground) return true;
     const { author } = message;
     if (config.bypassUsers.some((entry) => entry === author.id || entry === author.username)) {
       return true;
@@ -267,6 +275,7 @@ export function extractTrigger(
   const hasPrefix = text.startsWith(config.prefix);
   const withoutPrefix = hasPrefix ? text.slice(config.prefix.length).trim() : text;
 
+  if (message.isPlayground) return { text: withoutPrefix, viaPrefix: hasPrefix };
   if (message.isDM) return config.allowDMs ? { text: withoutPrefix, viaPrefix: hasPrefix } : null;
 
   if (config.channelMode === 'whitelist') {
@@ -280,8 +289,19 @@ export function extractTrigger(
   return byMention ? { text, viaPrefix: false } : null;
 }
 
-/** Une conversation par personne en MP, par couple salon et personne sur un serveur. */
-function sessionInfo(message: IncomingMessage): SessionInfo {
+/**
+ * Une conversation par personne en MP, par couple salon et personne sur un serveur, et par pseudo
+ * dans le simulateur.
+ */
+export function sessionInfo(message: IncomingMessage): SessionInfo {
+  if (message.isPlayground) {
+    return {
+      id: `playground:${message.author.id}`,
+      kind: 'playground',
+      userName: message.author.displayName,
+      channelName: null,
+    };
+  }
   return message.isDM
     ? {
         id: `dm:${message.author.id}`,
