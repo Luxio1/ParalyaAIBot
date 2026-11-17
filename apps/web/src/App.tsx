@@ -10,6 +10,7 @@ import { BehaviorPage } from '@/pages/BehaviorPage';
 import { BotPage } from '@/pages/BotPage';
 import { ConsolePage } from '@/pages/ConsolePage';
 import { LoginPage } from '@/pages/LoginPage';
+import { MemoryPage } from '@/pages/MemoryPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { SetupPage } from '@/pages/SetupPage';
 
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/bot" replace /> },
       { path: 'bot', element: <BotPage /> },
       { path: 'comportement', element: <BehaviorPage /> },
+      { path: 'memoire', element: <MemoryPage /> },
       { path: 'console', element: <ConsolePage /> },
       { path: 'parametres', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/bot" replace /> },

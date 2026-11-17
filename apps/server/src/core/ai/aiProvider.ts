@@ -1,9 +1,24 @@
 import type { AiModel } from '@bot/shared';
 
+/** Un message d'une conversation passée. */
+export interface AiTurn {
+  role: 'user' | 'model';
+  text: string;
+}
+
+export interface AiImage {
+  mimeType: string;
+  /** Contenu en base64. */
+  data: string;
+}
+
 export interface AiRequest {
   model: string;
   systemPrompt: string;
+  /** Du plus ancien au plus récent, commençant par un message de l'utilisateur. */
+  history: AiTurn[];
   prompt: string;
+  images: AiImage[];
 }
 
 /** Un fournisseur d'IA (Gemini aujourd'hui). Ses erreurs sont des `AiError`. */

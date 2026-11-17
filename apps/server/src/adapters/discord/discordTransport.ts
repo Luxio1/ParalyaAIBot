@@ -1,6 +1,11 @@
 import { DISCORD_MAX_MESSAGE_LENGTH } from '@bot/shared';
 import { cleanContent, type Message } from 'discord.js';
-import type { IncomingMessage, Transport } from '../../core/pipeline/messagePipeline';
+import type {
+  Attachment,
+  IncomingMessage,
+  QuotedMessage,
+  Transport,
+} from '../../core/pipeline/messagePipeline';
 import { chunkText } from '../../lib/chunkText';
 
 /** Discord efface l'indicateur au bout de 10 s ; il faut le renvoyer tant que la réponse se prépare. */
@@ -24,6 +29,7 @@ export function toIncomingMessage(message: Message, botId: string): IncomingMess
     text: cleanContent(withoutBot, channel).trim(),
     author: {
       id: message.author.id,
+      username: message.author.username,
       displayName: message.member?.displayName ?? message.author.displayName,
     },
     isDM: channel.isDMBased(),
@@ -31,10 +37,12 @@ export function toIncomingMessage(message: Message, botId: string): IncomingMess
     channelName: 'name' in channel && channel.name ? channel.name : 'MP',
     mentionsBot,
     repliesToBot: message.mentions.repliedUser?.id === botId,
+    isReply: message.reference?.messageId !== undefined,
+    attachments: toAttachments(message),
   };
 }
 
-export function discordTransport(message: Message): Transport {
+export function discordTransport(message: Message, botId: string): Transport {
   return {
     async reply(text) {
       // Le texte vient de l'IA : il ne doit notifier personne, sauf l'auteur de la question.
@@ -53,5 +61,24 @@ export function discordTransport(message: Message): Transport {
       const timer = setInterval(send, TYPING_REFRESH_MS);
       return () => clearInterval(timer);
     },
+    async fetchQuoted(): Promise<QuotedMessage | null> {
+      if (!message.reference?.messageId) return null;
+      const quoted = await message.fetchReference();
+      return {
+        authorName: quoted.member?.displayName ?? quoted.author.displayName,
+        isBot: quoted.author.id === botId,
+        text: cleanContent(quoted.content, quoted.channel).trim(),
+        attachments: toAttachments(quoted),
+      };
+    },
   };
+}
+
+function toAttachments(message: Message): Attachment[] {
+  return message.attachments.map((attachment) => ({
+    url: attachment.url,
+    name: attachment.name,
+    contentType: attachment.contentType,
+    size: attachment.size,
+  }));
 }

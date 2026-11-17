@@ -38,6 +38,19 @@ export const botConfigSchema = z.object({
     .trim()
     .min(1, 'Persona requis.')
     .max(SYSTEM_PROMPT_MAX_LENGTH, `Persona : ${SYSTEM_PROMPT_MAX_LENGTH} caractères maximum.`),
+  memoryEnabled: z.boolean(),
+  /** Durée d'inactivité au bout de laquelle une conversation est oubliée. */
+  memoryRetentionMinutes: z
+    .number()
+    .int()
+    .min(5, 'Rétention : 5 minutes minimum.')
+    .max(1440, 'Rétention : 24 heures maximum.'),
+  /** Messages conservés par conversation, ceux de l'utilisateur et du bot confondus. */
+  memoryMaxMessages: z
+    .number()
+    .int()
+    .min(4, 'Mémoire : 4 messages minimum.')
+    .max(20, 'Mémoire : 20 messages maximum.'),
 });
 export type BotConfig = z.infer<typeof botConfigSchema>;
 
@@ -85,4 +98,7 @@ export const DEFAULT_BOT_CONFIG: BotConfig = {
   allowDMs: true,
   model: DEFAULT_AI_MODEL,
   systemPrompt: PERSONA_PRESETS[0].prompt,
+  memoryEnabled: true,
+  memoryRetentionMinutes: 30,
+  memoryMaxMessages: 10,
 };

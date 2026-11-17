@@ -223,8 +223,9 @@ export class BotManager {
       client.on(event, () => this.#emit({ type: 'bot:discovery-changed' }));
     }
     client.on(Events.MessageCreate, (message) => {
-      const incoming = client.user && toIncomingMessage(message, client.user.id);
-      if (incoming) void this.pipeline.handle(incoming, discordTransport(message));
+      const botId = client.user?.id;
+      const incoming = botId && toIncomingMessage(message, botId);
+      if (incoming) void this.pipeline.handle(incoming, discordTransport(message, botId));
     });
     client.on(Events.Error, (error) => {
       this.logBus.push('error', `Erreur Discord : ${error.message}`);

@@ -4,6 +4,7 @@ import { fakeDiscord, type FakeDiscord } from '../adapters/discord/fakeDiscordCl
 import { AiService } from '../core/ai/aiService';
 import { FakeAiProvider } from '../core/ai/fakeAiProvider';
 import { LogBus } from '../core/logs/logBus';
+import { SessionStore } from '../core/memory/sessionStore';
 import { MessagePipeline } from '../core/pipeline/messagePipeline';
 import { openDatabase, type DatabaseHandle } from '../db/client';
 import { runMigrations } from '../db/migrate';
@@ -30,6 +31,7 @@ export interface TestApp {
   secrets: SecretsService;
   config: ConfigService;
   aiProvider: FakeAiProvider;
+  memory: SessionStore;
   bot: BotManager;
   discord: FakeDiscord;
   /** Construit une nouvelle application sur la même base, comme après un redémarrage. */
@@ -48,9 +50,10 @@ export async function createTestApp(
   const config = new ConfigService(database.db, logBus);
   const aiProvider = new FakeAiProvider();
   const ai = new AiService(aiProvider);
-  const pipeline = new MessagePipeline(() => config.get(), ai, logBus);
+  const memory = new SessionStore();
+  const pipeline = new MessagePipeline(() => config.get(), ai, memory, logBus);
   const bot = new BotManager(database.db, secrets, logBus, pipeline, discord.createClient);
-  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, bot });
+  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, memory, bot });
   return {
     app,
     database,
@@ -59,6 +62,7 @@ export async function createTestApp(
     secrets,
     config,
     aiProvider,
+    memory,
     bot,
     discord,
     async restart() {

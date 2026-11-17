@@ -78,7 +78,7 @@ ParalyaAIBot/
 - [x] **J1 Sécurité & config** — auth, secrets chiffrés, API secrets, WebSocket, LogBus + console live. *Validation : dashboard protégé, config persistée après redémarrage, aucun secret dans les réponses API.*
 - [x] **J2 Cycle de vie du bot** — `BotManager` start/stop, reconnexion au changement de token, statut temps réel, découverte serveurs/salons/rôles, lien OAuth2, autostart. *Validation : bot piloté depuis l'UI ; « config modifiée sans reconnexion » se vérifie en J3, premier jalon avec des réglages.*
 - [x] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
-- [ ] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
+- [x] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
 - [ ] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
 - [ ] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
 - [ ] **J7 Moteur d'événements** — règles, évaluation groupée (modèle rapide configurable), filtres, cooldowns, actions, variables, anti-doublon, testeur.
@@ -136,3 +136,13 @@ ParalyaAIBot/
 - **Découpage à 2000 caractères** (`lib/chunkText.ts`) : saut de ligne, sinon espace ; un bloc de code coupé est refermé puis rouvert avec son langage ; un emoji n'est jamais coupé en deux.
 - **Indicateur d'écriture** renvoyé toutes les 8 s pendant la génération (Discord l'efface après 10 s).
 - **Pas de mémoire** : chaque message est traité seul jusqu'au J4. Le nom de l'interlocuteur et le salon sont déjà donnés à l'IA.
+
+### J4 Mémoire & enrichissements (2026-11-17)
+- **Mémoire en RAM** (`core/memory/sessionStore.ts`), jamais écrite sur le disque, vidée au redémarrage. Une conversation par personne en MP (`dm:<utilisateur>`) et par couple salon parent et personne sur un serveur (`guild:<salon>:<utilisateur>`). Réglages `memoryEnabled`, `memoryRetentionMinutes` (5 à 1440, 30 par défaut) et `memoryMaxMessages` (4 à 20, 10 par défaut). L'historique commence toujours par un message de l'utilisateur. Seul le texte est gardé : les images et pages sont seulement mentionnées. Désactiver la mémoire la vide.
+- **Moniteur** : `GET /api/memory/sessions` ne renvoie que des métadonnées (personne, salon, nombre de messages, expiration), jamais le contenu. Événement `memory:changed` sur le WebSocket ; nettoyage des conversations expirées toutes les 30 s.
+- **`safeFetch`** (`lib/safeFetch.ts`, `node:http(s)` sans dépendance) : http(s) sur les ports par défaut, pas d'identifiants dans l'URL, `BlockList` des plages privées, locales et réservées (IPv4, IPv6, IPv4 encapsulé) vérifiée dans le `lookup` de la connexion (pas de DNS rebinding) et sur les IP littérales, 3 redirections revérifiées, 8 s, taille lue en flux (2 Mo pour une page, 8 Mo pour une image). Vérifié sur de vrais sites : redirection suivie, `localtest.me` (public, pointe vers ::1) refusé.
+- **Enrichissements après la décision de répondre** (`core/enrich/context.ts`) : l'ancienne version téléchargeait images et liens pour chaque message reçu. Au plus 4 images et 3 liens ; le message cité ne fournit images et liens que si la question n'en a pas.
+- **Vision** : PNG, JPEG, WebP, HEIC et HEIF (formats acceptés par Gemini), 8 Mo au plus ; GIF et SVG ignorés avec la raison dans la console et dans le prompt.
+- **Pages web** : `node-html-parser` 9.0.6 (la 9.0.7 avait moins de deux semaines) plutôt que les expressions régulières de l'ancienne version. Titre, description, texte de `main`/`article` sinon `body`, sans scripts, menus ni pied de page, limité à 4 000 caractères. User-Agent honnête (`compatible; ParalyaAIBot`).
+- **Injection de consignes** : message cité et pages sont placés dans des blocs `<donnees source="...">` que leur contenu ne peut pas refermer, et le prompt système interdit d'obéir aux instructions qu'ils contiennent.
+- **Interlocuteur** : pseudo et identifiant (`@username`) donnés à l'IA. Une image ou une réponse à un message sans texte obtient une réponse au lieu du message d'aide.

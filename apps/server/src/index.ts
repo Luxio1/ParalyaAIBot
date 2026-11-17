@@ -3,6 +3,7 @@ import { BotManager } from './adapters/discord/botManager';
 import { AiService } from './core/ai/aiService';
 import { GeminiProvider } from './core/ai/providers/gemini';
 import { LogBus } from './core/logs/logBus';
+import { SessionStore } from './core/memory/sessionStore';
 import { MessagePipeline } from './core/pipeline/messagePipeline';
 import { openDatabase } from './db/client';
 import { runMigrations } from './db/migrate';
@@ -33,9 +34,12 @@ async function main(): Promise<void> {
   secrets.onChange((name) => {
     if (name === 'geminiApiKey') ai.clearModelCache();
   });
-  const pipeline = new MessagePipeline(() => config.get(), ai, logBus);
+  const memory = new SessionStore();
+  // Les conversations expirées disparaissent du moniteur sans attendre un nouveau message.
+  setInterval(() => memory.sweep(config.get().memoryRetentionMinutes * 60_000), 30_000).unref();
+  const pipeline = new MessagePipeline(() => config.get(), ai, memory, logBus);
   const bot = new BotManager(database.db, secrets, logBus, pipeline);
-  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, bot });
+  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, memory, bot });
   app.log.info(`${APP_NAME} v${APP_VERSION}, base de données : ${env.databaseFile}`);
 
   let closing = false;

@@ -27,6 +27,16 @@ import { cn } from '@/lib/utils';
 
 const CONFIG_QUERY_KEY = ['config'];
 
+const RETENTION_CHOICES = [
+  [5, '5 minutes'],
+  [15, '15 minutes'],
+  [30, '30 minutes'],
+  [60, '1 heure'],
+  [180, '3 heures'],
+  [720, '12 heures'],
+  [1440, '24 heures'],
+] as const;
+
 export function BehaviorPage() {
   const saved = useQuery({
     queryKey: CONFIG_QUERY_KEY,
@@ -108,6 +118,57 @@ function BehaviorForm({ saved }: { saved: BotConfig }) {
           <Label htmlFor="allowDMs">Répondre aux messages privés</Label>
         </div>
         <Hint>En MP, le bot répond à chaque message, sans mention ni préfixe.</Hint>
+      </Section>
+
+      <Section
+        title="Mémoire"
+        description="Le bot se souvient des derniers échanges avec chaque personne."
+      >
+        <div className="flex items-center gap-3">
+          <Switch
+            id="memoryEnabled"
+            checked={draft.memoryEnabled}
+            onCheckedChange={(memoryEnabled) => set({ memoryEnabled })}
+          />
+          <Label htmlFor="memoryEnabled">Mémoire de conversation</Label>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="memoryRetention">Oublier après une inactivité de</Label>
+            <select
+              id="memoryRetention"
+              className="border-input dark:bg-input/30 [&>option]:bg-popover h-9 rounded-md border bg-transparent px-3 text-sm"
+              disabled={!draft.memoryEnabled}
+              value={draft.memoryRetentionMinutes}
+              onChange={(event) => set({ memoryRetentionMinutes: Number(event.target.value) })}
+            >
+              {RETENTION_CHOICES.map(([minutes, label]) => (
+                <option key={minutes} value={minutes}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="memoryMaxMessages">Messages conservés (4 à 20)</Label>
+            <Input
+              id="memoryMaxMessages"
+              type="number"
+              min={4}
+              max={20}
+              disabled={!draft.memoryEnabled}
+              value={draft.memoryMaxMessages}
+              onChange={(event) => set({ memoryMaxMessages: Number(event.target.value) })}
+            />
+          </div>
+        </div>
+        <Hint>
+          Une conversation par personne en MP, et par personne et salon sur un serveur. La mémoire
+          est vidée au redémarrage du serveur.{' '}
+          <Link to="/memoire" className="underline">
+            Voir les conversations en cours
+          </Link>
+        </Hint>
       </Section>
 
       <Section title="Intelligence artificielle">

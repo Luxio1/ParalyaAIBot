@@ -3,6 +3,7 @@ import type { WebSocket } from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
 import type { BotManager } from '../adapters/discord/botManager';
 import type { LogBus } from '../core/logs/logBus';
+import type { SessionStore } from '../core/memory/sessionStore';
 import type { AuthService } from '../services/authService';
 import { SESSION_COOKIE } from './session';
 
@@ -14,6 +15,7 @@ export function registerRealtimeRoutes(
   app: FastifyInstance,
   logBus: LogBus,
   bot: BotManager,
+  memory: SessionStore,
   auth: AuthService,
 ): void {
   app.get('/ws', { websocket: true }, (socket, request) => {
@@ -23,6 +25,7 @@ export function registerRealtimeRoutes(
     const unsubscribers = [
       logBus.subscribe((event) => send(socket, event)),
       bot.subscribe((event) => send(socket, event)),
+      memory.subscribe(() => send(socket, { type: 'memory:changed' })),
     ];
 
     // Une session fermée ailleurs (déconnexion, mot de passe changé) coupe aussi le flux ouvert.
