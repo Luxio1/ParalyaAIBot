@@ -1,11 +1,15 @@
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { BotManager } from '../adapters/discord/botManager';
 import { fakeDiscord, type FakeDiscord } from '../adapters/discord/fakeDiscordClient';
+import { AiService } from '../core/ai/aiService';
+import { FakeAiProvider } from '../core/ai/fakeAiProvider';
 import { LogBus } from '../core/logs/logBus';
+import { MessagePipeline } from '../core/pipeline/messagePipeline';
 import { openDatabase, type DatabaseHandle } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { parseEnv } from '../env';
 import { AuthService } from '../services/authService';
+import { ConfigService } from '../services/configService';
 import { SecretsService } from '../services/secretsService';
 import { buildApp } from './app';
 import { SESSION_COOKIE } from './session';
@@ -24,6 +28,8 @@ export interface TestApp {
   logBus: LogBus;
   auth: AuthService;
   secrets: SecretsService;
+  config: ConfigService;
+  aiProvider: FakeAiProvider;
   bot: BotManager;
   discord: FakeDiscord;
   /** Construit une nouvelle application sur la même base, comme après un redémarrage. */
@@ -39,14 +45,20 @@ export async function createTestApp(
   const logBus = new LogBus();
   const auth = new AuthService(database.db, logBus);
   const secrets = new SecretsService(database.db, env.appSecret, {}, logBus);
-  const bot = new BotManager(database.db, secrets, logBus, discord.createClient);
-  const app = await buildApp({ env, database, logBus, auth, secrets, bot });
+  const config = new ConfigService(database.db, logBus);
+  const aiProvider = new FakeAiProvider();
+  const ai = new AiService(aiProvider);
+  const pipeline = new MessagePipeline(() => config.get(), ai, logBus);
+  const bot = new BotManager(database.db, secrets, logBus, pipeline, discord.createClient);
+  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, bot });
   return {
     app,
     database,
     logBus,
     auth,
     secrets,
+    config,
+    aiProvider,
     bot,
     discord,
     async restart() {

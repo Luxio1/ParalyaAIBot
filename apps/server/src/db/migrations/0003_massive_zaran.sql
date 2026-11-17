@@ -1,0 +1,1 @@
+ALTER TABLE `bot_settings` ADD `config` text DEFAULT '{}' NOT NULL;

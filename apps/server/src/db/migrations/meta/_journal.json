@@ -22,6 +22,13 @@
       "when": 1794920900578,
       "tag": "0002_greedy_sersi",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794926553414,
+      "tag": "0003_massive_zaran",
+      "breakpoints": true
     }
   ]
 }

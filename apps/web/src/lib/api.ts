@@ -1,4 +1,4 @@
-import { apiErrorSchema, authStateSchema } from '@bot/shared';
+import { apiErrorSchema, authStateSchema, discoveredGuildSchema } from '@bot/shared';
 import { queryOptions } from '@tanstack/react-query';
 
 export class ApiError extends Error {
@@ -36,6 +36,11 @@ export const authStateQuery = queryOptions({
 });
 
 export const BOT_DISCOVERY_QUERY_KEY = ['bot', 'discovery'];
+
+export const botDiscoveryQuery = queryOptions({
+  queryKey: BOT_DISCOVERY_QUERY_KEY,
+  queryFn: () => apiGet('/api/bot/discovery', discoveredGuildSchema.array()),
+});
 
 async function request(method: string, path: string, body?: unknown): Promise<Response> {
   const response = await fetch(path, {

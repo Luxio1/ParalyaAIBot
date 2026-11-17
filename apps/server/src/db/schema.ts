@@ -37,10 +37,14 @@ export const secrets = sqliteTable('secrets', {
   updatedAt: timestamp('updated_at'),
 });
 
-/** Une seule ligne (`id = 1`). */
+/** Identifiant de l'unique ligne de `bot_settings`. */
+export const BOT_SETTINGS_ID = 1;
+
 export const botSettings = sqliteTable('bot_settings', {
   id: integer('id').primaryKey(),
   /** Vrai tant que le bot doit tourner : il se reconnecte alors au démarrage du serveur. */
   autoStart: integer('auto_start', { mode: 'boolean' }).notNull().default(false),
+  /** `BotConfig` en JSON, validé et complété par les valeurs par défaut à la lecture. */
+  config: text('config', { mode: 'json' }).notNull().default({}),
   updatedAt: timestamp('updated_at'),
 });

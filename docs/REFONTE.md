@@ -77,7 +77,7 @@ ParalyaAIBot/
 - [x] **J0 Fondations** *(terminé le 2026-11-16 ; `docker compose up` reste à vérifier, Docker absent du poste de dev)* — monorepo, TS strict, ESLint/Prettier, `packages/shared`, Drizzle + migrations, env validé, Dockerfile, debug VS Code. *Validation : `pnpm dev` et `docker compose up` démarrent.*
 - [x] **J1 Sécurité & config** — auth, secrets chiffrés, API secrets, WebSocket, LogBus + console live. *Validation : dashboard protégé, config persistée après redémarrage, aucun secret dans les réponses API.*
 - [x] **J2 Cycle de vie du bot** — `BotManager` start/stop, reconnexion au changement de token, statut temps réel, découverte serveurs/salons/rôles, lien OAuth2, autostart. *Validation : bot piloté depuis l'UI ; « config modifiée sans reconnexion » se vérifie en J3, premier jalon avec des réglages.*
-- [ ] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
+- [x] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
 - [ ] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
 - [ ] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
 - [ ] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
@@ -123,3 +123,16 @@ ParalyaAIBot/
 - **Temps réel** : le statut est poussé sur le WebSocket (`bot:status`, envoyé à la connexion, à chaque changement et quand la latence change, vérifiée toutes les 30 s). La découverte reste une route (`GET /api/bot/discovery`) que le client relit sur `bot:discovery-changed` (serveur rejoint ou quitté, salon ou rôle modifié).
 - **Tests** : un faux client (`fakeDiscordClient.ts`) remplace discord.js, sans réseau. Testé à la main contre Discord avec un token invalide.
 - **CSP** : `img-src` autorise `https://cdn.discordapp.com` pour les avatars et icônes de serveurs.
+
+### J3 Pipeline & IA (2026-11-17)
+- **`@google/genai` 2.32** et non 3.4 : la 3.4 avait moins d'un jour et pnpm refuse les versions trop récentes (`minimumReleaseAge`), une protection contre les paquets compromis qu'on garde active. Ses scripts d'installation (`@google/genai`, `protobufjs`) sont refusés dans `allowBuilds`, ils ne servent pas à l'exécution.
+- **Réglages en JSON** dans `bot_settings.config`, validés par `botConfigSchema` et complétés par `DEFAULT_BOT_CONFIG` à la lecture : un réglage ajouté plus tard ne demande pas de migration. `ConfigService` les garde en mémoire ; le pipeline les relit à chaque message (application à chaud).
+- **Pipeline indépendant de Discord** : `core/pipeline` reçoit un `IncomingMessage` et répond par un `Transport`. L'adaptateur Discord retire la mention du bot, résout les autres mentions avec `cleanContent` de discord.js, et ramène un fil à son salon parent pour la liste blanche.
+- **Déclenchement** : la mention couvre aussi « Répondre » sur un message du bot (`mentions.repliedUser`) et la mention du rôle automatique du bot. Le préfixe est retiré de la question, y compris en MP. Déclencheur seul : message d'aide, sans appel à l'IA.
+- **Aucune mention dans les réponses** (`allowedMentions: { parse: [] }`) : l'IA ne peut pas notifier `@everyone`, un rôle ou un membre. Seul l'auteur de la question est notifié par la réponse.
+- **Erreurs de l'IA** : les utilisateurs Discord voient une phrase neutre ; la cause traduite (clé absente ou refusée, quota, modèle inconnu, indisponibilité, réponse vide) va dans la console.
+- **Pas de nettoyage des réponses par expressions régulières** (contrairement à l'ancien `cleanAiReply`) : la consigne « sans préambule » est ajoutée au persona.
+- **Modèles** : liste lue chez Google (`models.list`, modèles `gemini*` qui acceptent `generateContent`), en cache 10 min et vidée quand la clé change. Pas de liste figée dans le code.
+- **Découpage à 2000 caractères** (`lib/chunkText.ts`) : saut de ligne, sinon espace ; un bloc de code coupé est refermé puis rouvert avec son langage ; un emoji n'est jamais coupé en deux.
+- **Indicateur d'écriture** renvoyé toutes les 8 s pendant la génération (Discord l'efface après 10 s).
+- **Pas de mémoire** : chaque message est traité seul jusqu'au J4. Le nom de l'interlocuteur et le salon sont déjà donnés à l'IA.

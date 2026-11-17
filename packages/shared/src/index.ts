@@ -8,6 +8,7 @@ export * from './constants';
 export * from './schemas/api';
 export * from './schemas/auth';
 export * from './schemas/bot';
+export * from './schemas/botConfig';
 export * from './schemas/health';
 export * from './schemas/logs';
 export * from './schemas/realtime';
