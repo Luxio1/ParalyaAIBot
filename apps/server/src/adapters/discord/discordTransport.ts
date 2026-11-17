@@ -33,6 +33,7 @@ export function toIncomingMessage(message: Message, botId: string): IncomingMess
       displayName: message.member?.displayName ?? message.author.displayName,
     },
     isDM: channel.isDMBased(),
+    guildId: message.guildId,
     channelId: channel.isDMBased() ? null : channel.isThread() ? channel.parentId : channel.id,
     channelName: 'name' in channel && channel.name ? channel.name : 'MP',
     mentionsBot,

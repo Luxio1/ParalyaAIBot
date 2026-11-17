@@ -4,6 +4,7 @@ import {
   botConfigSchema,
   commandSchema,
   discoveredGuildSchema,
+  eventRuleSchema,
   memorySessionSchema,
 } from '@bot/shared';
 import { queryOptions } from '@tanstack/react-query';
@@ -28,7 +29,13 @@ export async function apiGet<T>(path: string, schema: Schema<T>): Promise<T> {
   return schema.parse(await response.json());
 }
 
-/** Toutes les mutations de l'API répondent 204 sans corps. */
+/** Action qui renvoie un résultat (le testeur d'événements). */
+export async function apiPost<T>(path: string, body: unknown, schema: Schema<T>): Promise<T> {
+  const response = await request('POST', path, body);
+  return schema.parse(await response.json());
+}
+
+/** Les mutations de l'API répondent 204 sans corps. */
 export async function apiSend(
   method: 'POST' | 'PUT' | 'DELETE',
   path: string,
@@ -52,6 +59,11 @@ export const configQuery = queryOptions({
 export const commandsQuery = queryOptions({
   queryKey: ['commands'],
   queryFn: () => apiGet('/api/commands', commandSchema.array()),
+});
+
+export const eventRulesQuery = queryOptions({
+  queryKey: ['events', 'rules'],
+  queryFn: () => apiGet('/api/events/rules', eventRuleSchema.array()),
 });
 
 export const memorySessionsQuery = queryOptions({

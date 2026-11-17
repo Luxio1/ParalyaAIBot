@@ -120,14 +120,20 @@ export function DiscoveryPicker(props: {
   );
 }
 
-/** Choix d'un seul salon, parmi ceux que voit le bot. */
-export function ChannelSelect(props: {
+/** Choix d'un seul salon ou rôle, parmi ceux que voit le bot. */
+export function DiscoverySelect(props: {
+  kind: Kind;
   id: string;
   value: string | null;
-  onChange: (channelId: string | null) => void;
+  onChange: (id: string | null) => void;
+  /** Libellé de l'option vide. */
+  emptyLabel: string;
 }) {
   const { guilds } = useDiscoveredGuilds();
-  const listed = guilds.some((guild) => guild.channels.some((c) => c.id === props.value));
+  const { sign } = WORDING[props.kind];
+  const listed = guilds.some((guild) =>
+    itemsOf(guild, props.kind).some((item) => item.id === props.value),
+  );
   return (
     <select
       id={props.id}
@@ -135,13 +141,14 @@ export function ChannelSelect(props: {
       value={props.value ?? ''}
       onChange={(event) => props.onChange(event.target.value || null)}
     >
-      <option value="">Choisir un salon</option>
-      {props.value && !listed && <option value={props.value}>Salon {props.value}</option>}
+      <option value="">{props.emptyLabel}</option>
+      {props.value && !listed && <option value={props.value}>ID {props.value}</option>}
       {guilds.map((guild) => (
         <optgroup key={guild.id} label={guild.name}>
-          {guild.channels.map((channel) => (
-            <option key={channel.id} value={channel.id}>
-              #{channel.name}
+          {itemsOf(guild, props.kind).map((item) => (
+            <option key={item.id} value={item.id}>
+              {sign}
+              {item.name}
             </option>
           ))}
         </optgroup>

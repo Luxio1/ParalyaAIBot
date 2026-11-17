@@ -10,6 +10,7 @@ export * from './schemas/auth';
 export * from './schemas/bot';
 export * from './schemas/botConfig';
 export * from './schemas/commands';
+export * from './schemas/events';
 export * from './schemas/health';
 export * from './schemas/logs';
 export * from './schemas/memory';

@@ -35,6 +35,7 @@ function message(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
     text: 'Bonjour',
     author: { id: '200000000000000001', username: 'alice', displayName: 'Alice' },
     isDM: false,
+    guildId: '400000000000000001',
     channelId: CHANNEL,
     channelName: 'général',
     mentionsBot: false,

@@ -81,7 +81,7 @@ ParalyaAIBot/
 - [x] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
 - [x] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
 - [x] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
-- [ ] **J7 Moteur d'événements** — règles, évaluation groupée (modèle rapide configurable), filtres, cooldowns, actions, variables, anti-doublon, testeur.
+- [x] **J7 Moteur d'événements** — règles, évaluation groupée (modèle rapide configurable), filtres, cooldowns, actions, variables, anti-doublon, testeur.
 - [ ] **J8 Playground & Guide** — simulateur sur le pipeline commun, onglet Guide Developer Portal.
 - [ ] **J9 Durcissement & déploiement** — tests, import legacy, sauvegarde DB, README déploiement VPS/Railway/Fly, revue sécurité.
 
@@ -163,3 +163,15 @@ ParalyaAIBot/
 - **Exemptions** : propriétaires de serveur (toujours, sans réglage), rôles par ID (`bypassRoleIds`, renommer un rôle ne casse rien), utilisateurs par ID ou nom d'utilisateur Discord unique (`bypassUsers`, `@Pseudo` rangé en `pseudo`). Plus d'exemption par pseudo d'affichage, que chacun peut changer. En MP, les rôles sont demandés à Discord (`members.fetch`, sans intent privilégié) et gardés 5 minutes.
 - **Retranscription des MP** (`adapters/discord/dmRelay.ts`) : tous les MP reçus, même quand le bot n'y répond pas, et chaque réponse du bot en MP (y compris avertissements et commandes). Citations Markdown, pièces jointes en liens, découpage à 2 000 caractères, `allowedMentions: { parse: [] }` : un MP contenant `@everyone` ne notifie plus tout le salon du staff. Salon obligatoire quand le relais est activé ; un salon inaccessible est signalé dans la console.
 - **`MessagePipeline`** reçoit ses dépendances dans un objet (`PipelineDeps`) ; `Transport.isExempt(roleIds)` laisse l'adaptateur vérifier propriétaires et rôles.
+
+### J7 Moteur d'événements (2026-11-17)
+- **Coût borné** (`core/events/eventEngine.ts`) : un seul appel par message pour toutes les règles, et seulement après tri (moteur actif, message de serveur, au moins 3 lettres hors liens, règle active qui surveille le salon, personne hors délai de la règle). Budget d'analyses par minute (`eventsMaxPerMinute`, 30 par défaut) en fenêtre fixe, dépassement signalé une fois. Modèle d'analyse séparé (`eventsModel`, Flash-Lite par défaut). Textes rédigés par l'IA seulement au déclenchement.
+- **Rien d'actif par défaut** : `eventsEnabled` faux, les 4 exemples installés une fois (`bot_settings.events_seeded`) et désactivés, leur salon d'alerte restant à choisir.
+- **Réponse structurée** : `responseJsonSchema` de Gemini (`AiRequest.jsonSchema`), puis validation Zod ; une règle absente de la réponse ne se déclenche pas. L'ancien code nettoyait le JSON à la main et échouait en silence.
+- **Règles** : table `event_rules` avec une colonne `definition` (`EventRuleInput` en JSON, validé à la lecture, une règle illisible est signalée et ignorée). Actions MP et salon indépendantes (l'ancien `actionType` dm/channel/both). Validation : au moins une action, destinataire, salon d'alerte et texte requis selon les choix. 50 règles au plus.
+- **Mentions** : seul `channel.mentionRoleId` peut notifier (`allowedMentions.roles`) ; les variables (`{user}` est du texte) et `{message}` ne notifient personne. L'ancien `channelMentionRole` était du texte qui ne notifiait pas, et `{message}` pouvait relayer `@everyone`.
+- **MP aux membres d'un rôle** : intent privilégié « Server Members » (`membersIntent`), interrupteur placé dans les réglages du moteur (page Événements) plutôt que dans Paramètres, plus proche de son usage. Le changer reconnecte le bot (`ConfigService.onChange`). Liste des membres rechargée au plus toutes les 10 minutes, 10 destinataires au plus par alerte, un refus de MP n'arrête pas les autres envois.
+- **Serveurs uniquement** : les MP ne sont pas analysés (la retranscription du J6 les couvre). Texte seulement, pas d'images.
+- **Anti-doublon** : l'action dans le salon d'origine est sautée quand le bot répond déjà au message (`extractTrigger`).
+- **Testeur** (`POST /api/events/test`) : toutes les règles, actives ou non, sans filtre ni délai ; aperçu des textes écrits à l'avance, les textes IA ne sont pas générés.
+- **`container.ts`** assemble les services pour `index.ts` et les tests (`createTestApp`), qui dupliquaient le câblage ; `dataBlock` et sa consigne sont partagés (`core/ai/promptData.ts`).

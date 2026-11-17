@@ -1,19 +1,10 @@
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { BotManager } from '../adapters/discord/botManager';
 import { fakeDiscord, type FakeDiscord } from '../adapters/discord/fakeDiscordClient';
-import { AiService } from '../core/ai/aiService';
+import { createContainer, type Container } from '../container';
 import { FakeAiProvider } from '../core/ai/fakeAiProvider';
-import { LogBus } from '../core/logs/logBus';
-import { SessionStore } from '../core/memory/sessionStore';
-import { RateLimiter } from '../core/ratelimit/rateLimiter';
-import { MessagePipeline } from '../core/pipeline/messagePipeline';
 import { openDatabase, type DatabaseHandle } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { parseEnv } from '../env';
-import { AuthService } from '../services/authService';
-import { CommandService } from '../services/commandService';
-import { ConfigService } from '../services/configService';
-import { SecretsService } from '../services/secretsService';
 import { buildApp } from './app';
 import { SESSION_COOKIE } from './session';
 
@@ -25,70 +16,37 @@ const env = parseEnv({
   WEB_DIST_DIR: '/dossier/inexistant',
 });
 
-export interface TestApp {
+export type TestApp = Omit<Container, 'aiProvider'> & {
   app: FastifyInstance;
   database: DatabaseHandle;
-  logBus: LogBus;
-  auth: AuthService;
-  secrets: SecretsService;
-  config: ConfigService;
+  /** Remplace Gemini : réponses et erreurs réglables par les tests. */
   aiProvider: FakeAiProvider;
-  memory: SessionStore;
-  commands: CommandService;
-  bot: BotManager;
   discord: FakeDiscord;
   /** Construit une nouvelle application sur la même base, comme après un redémarrage. */
   restart(): Promise<TestApp>;
   close(): Promise<void>;
-}
+};
 
 export async function createTestApp(
   database: DatabaseHandle = openDatabase(':memory:'),
   discord: FakeDiscord = fakeDiscord(),
 ): Promise<TestApp> {
   runMigrations(database.db);
-  const logBus = new LogBus();
-  const auth = new AuthService(database.db, logBus);
-  const secrets = new SecretsService(database.db, env.appSecret, {}, logBus);
-  const config = new ConfigService(database.db, logBus);
   const aiProvider = new FakeAiProvider();
-  const ai = new AiService(aiProvider);
-  const memory = new SessionStore();
-  const commands = new CommandService(database.db, logBus);
-  const getConfig = () => config.get();
-  const rateLimiter = new RateLimiter();
-  const pipeline = new MessagePipeline({ getConfig, ai, memory, commands, rateLimiter, logBus });
-  const bot = new BotManager(
-    database.db,
-    secrets,
-    logBus,
-    pipeline,
-    getConfig,
-    discord.createClient,
-  );
-  const app = await buildApp({
-    env,
-    database,
-    logBus,
-    auth,
-    secrets,
-    config,
-    ai,
-    memory,
-    commands,
-    bot,
+  const container = createContainer({
+    db: database.db,
+    appSecret: env.appSecret,
+    envSecrets: {},
+    createAiProvider: () => aiProvider,
+    createDiscordClient: discord.createClient,
   });
+  const app = await buildApp({ env, database, ...container });
+  const { bot } = container;
   return {
+    ...container,
     app,
     database,
-    logBus,
-    auth,
-    secrets,
-    config,
     aiProvider,
-    memory,
-    commands,
-    bot,
     discord,
     async restart() {
       await bot.shutdown();

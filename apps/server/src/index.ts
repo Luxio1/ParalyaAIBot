@@ -1,19 +1,12 @@
 import { APP_NAME, APP_VERSION } from '@bot/shared';
-import { BotManager } from './adapters/discord/botManager';
-import { AiService } from './core/ai/aiService';
+import { createContainer } from './container';
 import { GeminiProvider } from './core/ai/providers/gemini';
-import { LogBus } from './core/logs/logBus';
-import { SessionStore } from './core/memory/sessionStore';
-import { RateLimiter } from './core/ratelimit/rateLimiter';
-import { MessagePipeline } from './core/pipeline/messagePipeline';
 import { openDatabase } from './db/client';
 import { runMigrations } from './db/migrate';
 import { EnvError, findRootDir, loadDotEnv, parseEnv } from './env';
 import { buildApp } from './http/app';
-import { AuthService } from './services/authService';
-import { CommandService } from './services/commandService';
-import { ConfigService } from './services/configService';
-import { SecretsService } from './services/secretsService';
+
+const SWEEP_INTERVAL_MS = 30_000;
 
 async function main(): Promise<void> {
   const rootDir = findRootDir();
@@ -23,42 +16,21 @@ async function main(): Promise<void> {
   const database = openDatabase(env.databaseFile);
   runMigrations(database.db);
 
-  const logBus = new LogBus();
-  const auth = new AuthService(database.db, logBus);
-  const secrets = new SecretsService(
-    database.db,
-    env.appSecret,
-    { geminiApiKey: env.geminiApiKey },
-    logBus,
-  );
-  const config = new ConfigService(database.db, logBus);
-  const ai = new AiService(new GeminiProvider(() => secrets.get('geminiApiKey')));
-  secrets.onChange((name) => {
-    if (name === 'geminiApiKey') ai.clearModelCache();
+  const container = createContainer({
+    db: database.db,
+    appSecret: env.appSecret,
+    envSecrets: { geminiApiKey: env.geminiApiKey },
+    createAiProvider: (secrets) => new GeminiProvider(() => secrets.get('geminiApiKey')),
   });
-  const memory = new SessionStore();
-  // Les conversations expirées disparaissent du moniteur sans attendre un nouveau message.
-  const rateLimiter = new RateLimiter();
+  const { bot, config, logBus, auth } = container;
+  // Conversations, quotas et délais expirés sont oubliés sans attendre un nouveau message.
   setInterval(() => {
-    memory.sweep(config.get().memoryRetentionMinutes * 60_000);
-    rateLimiter.sweep(config.get().rateLimitWindowSeconds * 1000);
-  }, 30_000).unref();
-  const commands = new CommandService(database.db, logBus);
-  const getConfig = () => config.get();
-  const pipeline = new MessagePipeline({ getConfig, ai, memory, commands, rateLimiter, logBus });
-  const bot = new BotManager(database.db, secrets, logBus, pipeline, getConfig);
-  const app = await buildApp({
-    env,
-    database,
-    logBus,
-    auth,
-    secrets,
-    config,
-    ai,
-    memory,
-    commands,
-    bot,
-  });
+    container.memory.sweep(config.get().memoryRetentionMinutes * 60_000);
+    container.rateLimiter.sweep(config.get().rateLimitWindowSeconds * 1000);
+    container.events.sweep();
+  }, SWEEP_INTERVAL_MS).unref();
+
+  const app = await buildApp({ env, database, ...container });
   app.log.info(`${APP_NAME} v${APP_VERSION}, base de données : ${env.databaseFile}`);
 
   let closing = false;

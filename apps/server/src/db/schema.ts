@@ -48,6 +48,7 @@ export const botSettings = sqliteTable('bot_settings', {
   config: text('config', { mode: 'json' }).notNull().default({}),
   /** Exemples installés une seule fois : supprimés, ils ne reviennent pas au redémarrage. */
   commandsSeeded: integer('commands_seeded', { mode: 'boolean' }).notNull().default(false),
+  eventsSeeded: integer('events_seeded', { mode: 'boolean' }).notNull().default(false),
   updatedAt: timestamp('updated_at'),
 });
 
@@ -61,6 +62,14 @@ export const commands = sqliteTable('commands', {
   response: text('response').notNull().default(''),
   promptTemplate: text('prompt_template').notNull().default(''),
   systemPrompt: text('system_prompt').notNull().default(''),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+});
+
+/** Règles du moteur d'événements ; `definition` est un `EventRuleInput` en JSON, validé à la lecture. */
+export const eventRules = sqliteTable('event_rules', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  definition: text('definition', { mode: 'json' }).notNull(),
   createdAt: timestamp('created_at'),
   updatedAt: timestamp('updated_at'),
 });
