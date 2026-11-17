@@ -50,6 +50,8 @@ function message(text: string, overrides: Partial<IncomingMessage> = {}): Incomi
     repliesToBot: false,
     isReply: false,
     attachments: [],
+    inlineImages: [],
+    isPlayground: false,
     ...overrides,
   };
 }

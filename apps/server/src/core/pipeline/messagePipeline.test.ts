@@ -42,6 +42,8 @@ function message(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
     repliesToBot: false,
     isReply: false,
     attachments: [],
+    inlineImages: [],
+    isPlayground: false,
     ...overrides,
   };
 }

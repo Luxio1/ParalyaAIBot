@@ -1,6 +1,6 @@
 import type { MemorySession } from '@bot/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { MessageSquare, Trash2, User } from 'lucide-react';
+import { FlaskConical, MessageSquare, Trash2, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
@@ -76,13 +76,17 @@ function SessionRow(props: {
   onRemove: () => void;
 }) {
   const { session } = props;
-  const Icon = session.kind === 'dm' ? User : MessageSquare;
+  const Icon = { dm: User, guild: MessageSquare, playground: FlaskConical }[session.kind];
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2 text-sm">
       <Icon className="text-muted-foreground size-4" aria-hidden />
       <span className="font-medium">{session.userName}</span>
       <span className="text-muted-foreground">
-        {session.channelName ? `#${session.channelName}` : 'Message privé'}
+        {session.channelName
+          ? `#${session.channelName}`
+          : session.kind === 'playground'
+            ? 'Simulateur'
+            : 'Message privé'}
       </span>
       <span className="text-muted-foreground ml-auto">
         {session.messageCount} message(s), oubli dans {formatDuration(props.remainingMs)}
