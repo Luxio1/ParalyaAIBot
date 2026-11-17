@@ -9,6 +9,7 @@ import { decryptSecret, deriveSecretsKey, encryptSecret } from '../lib/crypto';
 export class SecretsService {
   readonly #key: Buffer;
   readonly #values = new Map<SecretName, string>();
+  readonly #listeners = new Set<(name: SecretName) => void>();
 
   constructor(
     private readonly db: Db,
@@ -30,10 +31,21 @@ export class SecretsService {
     }
   }
 
+  /** Valeur en clair, pour le serveur uniquement : ne jamais la renvoyer dans une réponse. */
+  get(name: SecretName): string | undefined {
+    return this.#values.get(name) ?? this.envFallbacks[name];
+  }
+
+  /** Renvoie la fonction de désabonnement. */
+  onChange(listener: (name: SecretName) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
   list(): SecretStatus[] {
     return SECRET_NAMES.map((name) => {
       const fromDashboard = this.#values.get(name);
-      const value = fromDashboard ?? this.envFallbacks[name];
+      const value = this.get(name);
       return {
         name,
         isSet: value !== undefined,
@@ -52,11 +64,17 @@ export class SecretsService {
       .run();
     this.#values.set(name, value);
     this.logBus.push('system', `${SECRET_LABELS[name]} enregistré.`);
+    this.#notify(name);
   }
 
   remove(name: SecretName): void {
     this.db.delete(secrets).where(eq(secrets.name, name)).run();
     this.#values.delete(name);
     this.logBus.push('system', `${SECRET_LABELS[name]} supprimé.`);
+    this.#notify(name);
+  }
+
+  #notify(name: SecretName): void {
+    for (const listener of this.#listeners) listener(name);
   }
 }

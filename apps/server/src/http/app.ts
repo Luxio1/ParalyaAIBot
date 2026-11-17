@@ -8,6 +8,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { ZodError } from 'zod';
+import type { BotManager } from '../adapters/discord/botManager';
 import type { LogBus } from '../core/logs/logBus';
 import type { DatabaseHandle } from '../db/client';
 import type { Env } from '../env';
@@ -16,6 +17,7 @@ import type { AuthService } from '../services/authService';
 import type { SecretsService } from '../services/secretsService';
 import { registerRealtimeRoutes } from './realtime';
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from './routes/auth';
+import { registerBotRoutes } from './routes/bot';
 import { registerHealthRoute } from './routes/health';
 import { registerLogsRoutes } from './routes/logs';
 import { registerSecretsRoutes } from './routes/secrets';
@@ -28,11 +30,12 @@ export interface AppDeps {
   logBus: LogBus;
   auth: AuthService;
   secrets: SecretsService;
+  bot: BotManager;
 }
 
 /** Ne lance pas l'écoute : les tests passent par `app.inject()`. */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const { env, database, logBus, auth, secrets } = deps;
+  const { env, database, logBus, auth, secrets, bot } = deps;
   const app = Fastify({
     logger: loggerOptions(env),
     bodyLimit: 1024 * 1024,
@@ -40,8 +43,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   await app.register(fastifyHelmet, {
-    // Le dashboard doit rester utilisable en HTTP simple (VPS sans certificat).
-    contentSecurityPolicy: { directives: { upgradeInsecureRequests: null } },
+    contentSecurityPolicy: {
+      directives: {
+        // Avatars et icônes de serveurs servis par Discord.
+        imgSrc: ["'self'", 'data:', 'https://cdn.discordapp.com'],
+        // Le dashboard doit rester utilisable en HTTP simple (VPS sans certificat).
+        upgradeInsecureRequests: null,
+      },
+    },
   });
   await app.register(fastifyCookie);
   await app.register(fastifyRateLimit, {
@@ -94,7 +103,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerProtectedAuthRoutes(protectedApp, auth);
     registerSecretsRoutes(protectedApp, secrets);
     registerLogsRoutes(protectedApp, logBus);
-    registerRealtimeRoutes(protectedApp, logBus, auth);
+    registerBotRoutes(protectedApp, bot);
+    registerRealtimeRoutes(protectedApp, logBus, bot, auth);
   });
 
   const hasWeb = await registerStatic(app, env.webDistDir);

@@ -35,6 +35,8 @@ export const authStateQuery = queryOptions({
   queryFn: () => apiGet('/api/auth/state', authStateSchema),
 });
 
+export const BOT_DISCOVERY_QUERY_KEY = ['bot', 'discovery'];
+
 async function request(method: string, path: string, body?: unknown): Promise<Response> {
   const response = await fetch(path, {
     method,

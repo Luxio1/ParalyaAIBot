@@ -1,4 +1,5 @@
 import { APP_NAME, APP_VERSION } from '@bot/shared';
+import { BotManager } from './adapters/discord/botManager';
 import { LogBus } from './core/logs/logBus';
 import { openDatabase } from './db/client';
 import { runMigrations } from './db/migrate';
@@ -23,7 +24,8 @@ async function main(): Promise<void> {
     { geminiApiKey: env.geminiApiKey },
     logBus,
   );
-  const app = await buildApp({ env, database, logBus, auth, secrets });
+  const bot = new BotManager(database.db, secrets, logBus);
+  const app = await buildApp({ env, database, logBus, auth, secrets, bot });
   app.log.info(`${APP_NAME} v${APP_VERSION}, base de données : ${env.databaseFile}`);
 
   let closing = false;
@@ -32,6 +34,7 @@ async function main(): Promise<void> {
     closing = true;
     app.log.info(`Signal ${signal} reçu, arrêt en cours`);
     try {
+      await bot.shutdown();
       await app.close();
     } finally {
       database.close();
@@ -51,6 +54,7 @@ async function main(): Promise<void> {
       `Aucun compte administrateur. Ouvrez le dashboard et saisissez ce code d'installation : ${setupCode}`,
     );
   }
+  await bot.resume();
 }
 
 main().catch((error: unknown) => {
