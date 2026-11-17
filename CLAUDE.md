@@ -22,7 +22,7 @@ Refonte complète d'un bot Discord propulsé par l'IA, piloté par un dashboard 
 
 ## Règles de sécurité (non négociables)
 - Les secrets (token Discord, clés IA) sont chiffrés en base (AES-256-GCM, clé `APP_SECRET`) et **ne sont jamais renvoyés au front** (uniquement un masque `••••1234`).
-- Toutes les routes `/api/**` et le WebSocket exigent une session authentifiée (sauf `/api/auth/*` et `/healthz`).
+- Toutes les routes `/api/**` et le WebSocket exigent une session authentifiée (sauf `/healthz` et `/api/auth/{state,setup,login,logout}`).
 - Toute requête sortante vers une URL fournie par un utilisateur passe par `lib/safeFetch` (blocage IP privées/loopback/link-local, y compris après résolution DNS et redirections ; timeout ; taille max ; MIME filtrés).
 - Les médias et liens ne sont téléchargés **qu'après** avoir décidé que le bot prend en charge le message.
 - Ne jamais logger un secret.
@@ -87,6 +87,7 @@ En cas de doute sur un commentaire, un helper ou un paramètre : ne pas l'ajoute
 - Format : commit conventionnel avec gitmoji après les deux-points, sujet court et au plus une ou deux phrases. Exemple : `feat(server): ✨ Ajoute la route /healthz`.
 - Gitmojis : 🐛 fix, ✨ feature, 📝 docs, ♻️ refactor, 🔥 suppression, 🚀 build, 🎨 style, ✅ tests, 🔧 chore, 🚧 WIP, ⚡️ perf, 👷 CI.
 - Jamais de ligne `Claude-Session:` ni de lien de session dans un commit ou une pull request.
+- Une branche par jalon (`jN-sujet`). Quand l'utilisateur valide le jalon et demande le commit, Claude fusionne lui-même la branche dans `main` (`git merge --no-ff`) et pousse `main`, sans passer par une PR GitHub.
 
 ## Style des échanges
 - Direct, concis, technique. Pas de formules de politesse, d'annonces ni d'avertissements de principe. Ne pas s'excuser : corriger.

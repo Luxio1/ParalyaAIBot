@@ -19,6 +19,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   GEMINI_API_KEY: optionalString,
   WEB_DIST_DIR: optionalString,
+  TRUST_PROXY: z.stringbool().default(false),
 });
 
 export interface Env {
@@ -26,24 +27,23 @@ export interface Env {
   isProduction: boolean;
   host: string;
   port: number;
-  /** Dossier absolu des données persistantes. */
   dataDir: string;
-  /** Chemin absolu du fichier SQLite. */
   databaseFile: string;
-  /** Clé maîtresse de chiffrement des secrets. Ne jamais logger. */
+  /** Clé maîtresse de chiffrement des secrets. Ne jamais la logger. */
   appSecret: string;
   logLevel: string;
-  /** Clé Gemini de repli (si aucune clé n'est enregistrée dans le dashboard). */
+  /** Utilisée seulement si aucune clé n'est enregistrée dans le dashboard. */
   geminiApiKey: string | undefined;
-  /** Dossier absolu du dashboard buildé (servi en production). */
   webDistDir: string;
+  /** Derrière un reverse proxy : IP réelle et HTTPS lus dans les en-têtes `X-Forwarded-*`. */
+  trustProxy: boolean;
 }
 
 export class EnvError extends Error {
   constructor(public readonly issues: string[]) {
     super(
       [
-        'Configuration invalide (variables d’environnement) :',
+        "Configuration invalide (variables d'environnement) :",
         ...issues.map((issue) => `  - ${issue}`),
         'Copiez « .env.example » en « .env » et complétez les valeurs.',
       ].join('\n'),
@@ -52,7 +52,7 @@ export class EnvError extends Error {
   }
 }
 
-/** Remonte l'arborescence jusqu'à la racine du monorepo (repli : dossier courant). */
+/** Renvoie `from` si aucun `pnpm-workspace.yaml` n'est trouvé en remontant. */
 export function findRootDir(from: string = process.cwd()): string {
   let current = resolve(from);
   for (;;) {
@@ -63,7 +63,7 @@ export function findRootDir(from: string = process.cwd()): string {
   }
 }
 
-/** Charge le fichier `.env` de la racine s'il existe (sans écraser l'environnement réel). */
+/** Les variables déjà définies dans l'environnement ne sont pas écrasées. */
 export function loadDotEnv(rootDir: string): void {
   const file = join(rootDir, '.env');
   if (existsSync(file)) process.loadEnvFile(file);
@@ -100,5 +100,6 @@ export function parseEnv(
     logLevel: raw.LOG_LEVEL,
     geminiApiKey: raw.GEMINI_API_KEY,
     webDistDir: toAbsolute(raw.WEB_DIST_DIR ?? 'apps/web/dist'),
+    trustProxy: raw.TRUST_PROXY,
   };
 }

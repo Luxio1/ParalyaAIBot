@@ -1,22 +1,38 @@
+import { SECRET_NAMES } from '@bot/shared';
 import { sql } from 'drizzle-orm';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-/**
- * Comptes du dashboard. Un seul administrateur au départ ; la table est prête pour le multi-admin.
- * Les autres tables (configuration, secrets, commandes, règles…) arrivent au jalon J1.
- */
+const timestamp = (name: string) =>
+  integer(name, { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`);
+
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   username: text('username').notNull().unique(),
-  /** Hash argon2id du mot de passe (jamais le mot de passe en clair). */
+  /** Hash argon2id, jamais le mot de passe en clair. */
   passwordHash: text('password_hash').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
 });
 
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    /** SHA-256 du jeton du cookie : une fuite de la base ne donne pas de session utilisable. */
+    id: text('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: timestamp('created_at'),
+  },
+  (table) => [index('sessions_user_id_idx').on(table.userId)],
+);
+
+export const secrets = sqliteTable('secrets', {
+  name: text('name', { enum: SECRET_NAMES }).primaryKey(),
+  /** Format de `lib/crypto.ts`, chiffré avec le nom du secret comme donnée authentifiée. */
+  ciphertext: text('ciphertext').notNull(),
+  updatedAt: timestamp('updated_at'),
+});

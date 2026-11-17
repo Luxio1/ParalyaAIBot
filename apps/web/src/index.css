@@ -1,22 +1,70 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-surface: #1e1f22;
-  --color-panel: #2b2d31;
-  --color-border: #3f4147;
-  --color-brand: #5865f2;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --font-sans: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
-html,
-body,
-#root {
-  height: 100%;
+/* Palette sombre inspirée de Discord ; l'interface n'a pas de thème clair. */
+:root {
+  color-scheme: dark;
+  --radius: 0.625rem;
+  --background: #1e1f22;
+  --foreground: #f2f3f5;
+  --sidebar: #2b2d31;
+  --card: #2b2d31;
+  --card-foreground: #f2f3f5;
+  --popover: #313338;
+  --popover-foreground: #f2f3f5;
+  --primary: #5865f2;
+  --primary-foreground: #ffffff;
+  --secondary: #3f4147;
+  --secondary-foreground: #f2f3f5;
+  --muted: #313338;
+  --muted-foreground: #a4a9b3;
+  --accent: #35373c;
+  --accent-foreground: #f2f3f5;
+  --destructive: #da373c;
+  --border: #3f4147;
+  --input: #3f4147;
+  --ring: #5865f2;
 }
 
-body {
-  background-color: var(--color-surface);
-  color: #f2f3f5;
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
+@custom-variant dark (&:is(:root *));
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
 }

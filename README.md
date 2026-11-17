@@ -28,6 +28,16 @@ pnpm dev
 La base SQLite est créée automatiquement dans `./data/bot.db` et les migrations sont appliquées au
 démarrage.
 
+### Premier lancement
+
+Tant qu'aucun compte administrateur n'existe, le serveur affiche dans ses logs une ligne
+`Aucun compte administrateur. [...] code d'installation : XXXXXXXXXXXX`. Ouvrez le dashboard, saisissez ce
+code, puis choisissez un identifiant et un mot de passe (12 caractères minimum). Le code change à
+chaque redémarrage et ne sert plus une fois le compte créé.
+
+Le token Discord et la clé Gemini se saisissent ensuite dans **Paramètres**. Ils sont chiffrés en base
+avec `APP_SECRET` : si cette clé change, il faut les saisir à nouveau.
+
 ## Commandes
 
 | Commande                    | Rôle                                                    |
@@ -49,8 +59,12 @@ vivent dans un dossier unique (`DATA_DIR`, `/data` en Docker) qu'il suffit de sa
 
 - **Docker / VPS** : `docker compose up --build -d`
 - **Sans Docker** : `pnpm install && pnpm build && NODE_ENV=production HOST=0.0.0.0 pnpm start`
-- **PaaS (Railway, Fly.io, Render…)** : déployer `docker/Dockerfile` avec un volume monté sur
-  `/data` et la variable `APP_SECRET`.
+- **PaaS (Railway, Fly.io, Render)** : déployer `docker/Dockerfile` avec un volume monté sur
+  `/data` et les variables `APP_SECRET` et `TRUST_PROXY=true`.
+
+Derrière un hébergeur ou un reverse proxy (Caddy, Nginx), `TRUST_PROXY=true` est nécessaire pour que
+l'anti-bruteforce voie la vraie IP des clients. Servez le dashboard en HTTPS dès que possible : le cookie
+de session devient alors `Secure`.
 
 Le guide de déploiement détaillé arrive au jalon J9.
 
