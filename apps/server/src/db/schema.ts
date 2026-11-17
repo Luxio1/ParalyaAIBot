@@ -36,3 +36,11 @@ export const secrets = sqliteTable('secrets', {
   ciphertext: text('ciphertext').notNull(),
   updatedAt: timestamp('updated_at'),
 });
+
+/** Une seule ligne (`id = 1`). */
+export const botSettings = sqliteTable('bot_settings', {
+  id: integer('id').primaryKey(),
+  /** Vrai tant que le bot doit tourner : il se reconnecte alors au démarrage du serveur. */
+  autoStart: integer('auto_start', { mode: 'boolean' }).notNull().default(false),
+  updatedAt: timestamp('updated_at'),
+});

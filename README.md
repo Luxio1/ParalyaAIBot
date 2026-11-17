@@ -35,7 +35,7 @@ Tant qu'aucun compte administrateur n'existe, le serveur affiche dans ses logs u
 code, puis choisissez un identifiant et un mot de passe (12 caractères minimum). Le code change à
 chaque redémarrage et ne sert plus une fois le compte créé.
 
-Le token Discord et la clé Gemini se saisissent ensuite dans **Paramètres**. Ils sont chiffrés en base
+Le token Discord et la clé Gemini se saisissent ensuite dans **Paramètres**, puis le bot se démarre depuis la page **Bot**, qui fournit aussi son lien d'invitation. Ils sont chiffrés en base
 avec `APP_SECRET` : si cette clé change, il faut les saisir à nouveau.
 
 ## Commandes

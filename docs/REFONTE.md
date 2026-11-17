@@ -76,7 +76,7 @@ ParalyaAIBot/
 ## 4. Jalons
 - [x] **J0 Fondations** *(terminé le 2026-11-16 ; `docker compose up` reste à vérifier, Docker absent du poste de dev)* — monorepo, TS strict, ESLint/Prettier, `packages/shared`, Drizzle + migrations, env validé, Dockerfile, debug VS Code. *Validation : `pnpm dev` et `docker compose up` démarrent.*
 - [x] **J1 Sécurité & config** — auth, secrets chiffrés, API secrets, WebSocket, LogBus + console live. *Validation : dashboard protégé, config persistée après redémarrage, aucun secret dans les réponses API.*
-- [ ] **J2 Cycle de vie du bot** — `BotManager` start/stop/hot-apply, statut temps réel, découverte serveurs/salons/rôles, lien OAuth2, autostart. *Validation : bot piloté depuis l'UI, config modifiée sans reconnexion.*
+- [x] **J2 Cycle de vie du bot** — `BotManager` start/stop, reconnexion au changement de token, statut temps réel, découverte serveurs/salons/rôles, lien OAuth2, autostart. *Validation : bot piloté depuis l'UI ; « config modifiée sans reconnexion » se vérifie en J3, premier jalon avec des réglages.*
 - [ ] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
 - [ ] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
 - [ ] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
@@ -111,3 +111,15 @@ ParalyaAIBot/
 - **Logs de la console** : en mémoire uniquement (500 entrées), perdus au redémarrage. Le client reçoit `logs:snapshot` à la connexion puis chaque `log` ; pas de route `GET /api/logs`.
 - **Validation Zod en français** (`zod/locales`), configurée dans `packages/shared` pour le serveur et le dashboard.
 - **Dashboard** : React Router 8, composants shadcn/ui réduits aux modules Radix utilisés (`@radix-ui/react-slot`, `@radix-ui/react-label`) ; le paquet `radix-ui` complet tirait une dépendance manquante (`tslib`). Thème sombre unique.
+
+### J2 Cycle de vie du bot (2026-11-17)
+- **discord.js 14.28** (la v15 est encore en développement). Intents `Guilds`, `GuildMessages`, `MessageContent` (seul intent privilégié) et `DirectMessages`, avec le partial `Channel` sans lequel les MP n'arrivent pas.
+- **Pas de saisie de l'ID d'application** : il est lu sur le client connecté (`client.application.id`) pour construire le lien d'invitation. Le champ prévu par le cahier des charges est supprimé.
+- **Démarrage automatique** : `bot_settings.auto_start` vaut vrai après « Démarrer », faux après « Arrêter ». Au démarrage du serveur, le bot se reconnecte s'il était censé tourner. Pas d'interrupteur séparé.
+- **Changement de token** : si le bot est censé tourner, il se reconnecte avec le nouveau token. Un bot en erreur faute de token démarre donc dès que le token est enregistré.
+- **File d'opérations** dans `BotManager` : démarrage, arrêt, reconnexion et fermeture définitive s'exécutent l'un après l'autre, sans état intermédiaire incohérent.
+- **Erreurs traduites** : token refusé (`TokenInvalid` ou code 4004) et intent non activé (code 4014) donnent une consigne précise ; les autres erreurs sont affichées telles quelles. Les reconnexions automatiques de discord.js passent l'état à « Connexion ».
+- **Permissions d'invitation** : voir les salons, envoyer des messages (y compris dans les fils), lire l'historique (`274877975552`). La mention des rôles non mentionnables sera évaluée en J7.
+- **Temps réel** : le statut est poussé sur le WebSocket (`bot:status`, envoyé à la connexion, à chaque changement et quand la latence change, vérifiée toutes les 30 s). La découverte reste une route (`GET /api/bot/discovery`) que le client relit sur `bot:discovery-changed` (serveur rejoint ou quitté, salon ou rôle modifié).
+- **Tests** : un faux client (`fakeDiscordClient.ts`) remplace discord.js, sans réseau. Testé à la main contre Discord avec un token invalide.
+- **CSP** : `img-src` autorise `https://cdn.discordapp.com` pour les avatars et icônes de serveurs.

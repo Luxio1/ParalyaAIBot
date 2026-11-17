@@ -2,17 +2,21 @@ import { APP_NAME } from '@bot/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, LogOut, Settings, SquareTerminal } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
+import { BotStateDot } from '@/components/BotStateDot';
 import { Button } from '@/components/ui/button';
+import { useRealtime } from '@/hooks/useRealtime';
 import { apiSend, authStateQuery } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
+  { to: '/bot', label: 'Bot', icon: Bot },
   { to: '/console', label: 'Console', icon: SquareTerminal },
   { to: '/parametres', label: 'Paramètres', icon: Settings },
 ];
 
 export function AppLayout() {
   const queryClient = useQueryClient();
+  const botState = useRealtime().bot?.state;
   const username = useQuery(authStateQuery).data?.user?.username;
   const logout = useMutation({
     mutationFn: () => apiSend('POST', '/api/auth/logout'),
@@ -43,6 +47,7 @@ export function AppLayout() {
             >
               <Icon className="size-4" aria-hidden />
               {label}
+              {to === '/bot' && botState && <BotStateDot state={botState} className="ml-auto" />}
             </NavLink>
           ))}
         </nav>

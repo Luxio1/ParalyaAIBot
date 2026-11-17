@@ -1,4 +1,6 @@
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import { BotManager } from '../adapters/discord/botManager';
+import { fakeDiscord, type FakeDiscord } from '../adapters/discord/fakeDiscordClient';
 import { LogBus } from '../core/logs/logBus';
 import { openDatabase, type DatabaseHandle } from '../db/client';
 import { runMigrations } from '../db/migrate';
@@ -21,6 +23,9 @@ export interface TestApp {
   database: DatabaseHandle;
   logBus: LogBus;
   auth: AuthService;
+  secrets: SecretsService;
+  bot: BotManager;
+  discord: FakeDiscord;
   /** Construit une nouvelle application sur la même base, comme après un redémarrage. */
   restart(): Promise<TestApp>;
   close(): Promise<void>;
@@ -28,22 +33,29 @@ export interface TestApp {
 
 export async function createTestApp(
   database: DatabaseHandle = openDatabase(':memory:'),
+  discord: FakeDiscord = fakeDiscord(),
 ): Promise<TestApp> {
   runMigrations(database.db);
   const logBus = new LogBus();
   const auth = new AuthService(database.db, logBus);
   const secrets = new SecretsService(database.db, env.appSecret, {}, logBus);
-  const app = await buildApp({ env, database, logBus, auth, secrets });
+  const bot = new BotManager(database.db, secrets, logBus, discord.createClient);
+  const app = await buildApp({ env, database, logBus, auth, secrets, bot });
   return {
     app,
     database,
     logBus,
     auth,
+    secrets,
+    bot,
+    discord,
     async restart() {
+      await bot.shutdown();
       await app.close();
-      return createTestApp(database);
+      return createTestApp(database, discord);
     },
     async close() {
+      await bot.shutdown();
       await app.close();
       database.close();
     },

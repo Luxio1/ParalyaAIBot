@@ -15,6 +15,13 @@
       "when": 1794844043094,
       "tag": "0001_outstanding_ironclad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794920900578,
+      "tag": "0002_greedy_sersi",
+      "breakpoints": true
     }
   ]
 }

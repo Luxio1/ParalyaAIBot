@@ -4,7 +4,9 @@ import { Navigate, RouterProvider, createBrowserRouter } from 'react-router';
 import { AppLayout } from '@/components/AppLayout';
 import { AuthScreen } from '@/components/AuthScreen';
 import { Button } from '@/components/ui/button';
+import { RealtimeProvider } from '@/hooks/useRealtime';
 import { authStateQuery } from '@/lib/api';
+import { BotPage } from '@/pages/BotPage';
 import { ConsolePage } from '@/pages/ConsolePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -14,10 +16,11 @@ const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/console" replace /> },
+      { index: true, element: <Navigate to="/bot" replace /> },
+      { path: 'bot', element: <BotPage /> },
       { path: 'console', element: <ConsolePage /> },
       { path: 'parametres', element: <SettingsPage /> },
-      { path: '*', element: <Navigate to="/console" replace /> },
+      { path: '*', element: <Navigate to="/bot" replace /> },
     ],
   },
 ]);
@@ -46,5 +49,9 @@ export function App() {
   }
   if (auth.data.needsSetup) return <SetupPage />;
   if (!auth.data.user) return <LoginPage />;
-  return <RouterProvider router={router} />;
+  return (
+    <RealtimeProvider>
+      <RouterProvider router={router} />
+    </RealtimeProvider>
+  );
 }
