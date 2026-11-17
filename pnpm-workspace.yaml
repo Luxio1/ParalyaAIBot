@@ -3,6 +3,9 @@ packages:
   - 'packages/*'
 
 # Dépendances autorisées à exécuter leurs scripts d'installation (modules natifs).
+# Scripts inutiles à l'exécution : @google/genai (no-op) et protobufjs (sa propre CLI).
 allowBuilds:
+  '@google/genai': false
   better-sqlite3: true
   esbuild: true
+  protobufjs: false

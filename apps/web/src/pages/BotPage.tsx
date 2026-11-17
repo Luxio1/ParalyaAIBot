@@ -1,9 +1,4 @@
-import {
-  BOT_STATE_LABELS,
-  discoveredGuildSchema,
-  type BotStatus,
-  type DiscoveredGuild,
-} from '@bot/shared';
+import { BOT_STATE_LABELS, type BotStatus, type DiscoveredGuild } from '@bot/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Bot, ExternalLink, Hash, Megaphone, MessagesSquare, Play, Square } from 'lucide-react';
 import { Link } from 'react-router';
@@ -13,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRealtime } from '@/hooks/useRealtime';
-import { apiGet, apiSend, BOT_DISCOVERY_QUERY_KEY } from '@/lib/api';
+import { apiSend, botDiscoveryQuery } from '@/lib/api';
 
 const CHANNEL_ICONS = { text: Hash, announcement: Megaphone, forum: MessagesSquare };
 
@@ -112,11 +107,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function GuildsCard({ online }: { online: boolean }) {
-  const guilds = useQuery({
-    queryKey: BOT_DISCOVERY_QUERY_KEY,
-    queryFn: () => apiGet('/api/bot/discovery', discoveredGuildSchema.array()),
-    enabled: online,
-  });
+  const guilds = useQuery({ ...botDiscoveryQuery, enabled: online });
 
   return (
     <Card>

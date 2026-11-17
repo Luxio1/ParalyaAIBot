@@ -11,14 +11,15 @@ import {
 } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { LogBus } from '../../core/logs/logBus';
+import type { MessagePipeline } from '../../core/pipeline/messagePipeline';
 import type { Db } from '../../db/client';
-import { botSettings } from '../../db/schema';
+import { BOT_SETTINGS_ID, botSettings } from '../../db/schema';
 import type { SecretsService } from '../../services/secretsService';
 import { discoverGuilds } from './discovery';
+import { discordTransport, toIncomingMessage } from './discordTransport';
 
 type BotEvent = Extract<ServerEvent, { type: 'bot:status' | 'bot:discovery-changed' }>;
 
-const SETTINGS_ID = 1;
 const PING_REFRESH_MS = 30_000;
 
 /** Lire les salons, y répondre (fils compris) et lire l'historique pour le contexte des messages cités. */
@@ -74,6 +75,7 @@ export class BotManager {
     private readonly db: Db,
     private readonly secrets: SecretsService,
     private readonly logBus: LogBus,
+    private readonly pipeline: MessagePipeline,
     private readonly createClient: () => Client = createDiscordClient,
   ) {
     secrets.onChange((name) => {
@@ -220,6 +222,10 @@ export class BotManager {
     for (const event of DISCOVERY_EVENTS) {
       client.on(event, () => this.#emit({ type: 'bot:discovery-changed' }));
     }
+    client.on(Events.MessageCreate, (message) => {
+      const incoming = client.user && toIncomingMessage(message, client.user.id);
+      if (incoming) void this.pipeline.handle(incoming, discordTransport(message));
+    });
     client.on(Events.Error, (error) => {
       this.logBus.push('error', `Erreur Discord : ${error.message}`);
     });
@@ -262,14 +268,14 @@ export class BotManager {
   }
 
   #wantsRunning(): boolean {
-    const row = this.db.select().from(botSettings).where(eq(botSettings.id, SETTINGS_ID)).get();
+    const row = this.db.select().from(botSettings).where(eq(botSettings.id, BOT_SETTINGS_ID)).get();
     return row?.autoStart ?? false;
   }
 
   #setAutoStart(autoStart: boolean): void {
     this.db
       .insert(botSettings)
-      .values({ id: SETTINGS_ID, autoStart })
+      .values({ id: BOT_SETTINGS_ID, autoStart })
       .onConflictDoUpdate({ target: botSettings.id, set: { autoStart, updatedAt: new Date() } })
       .run();
   }

@@ -9,15 +9,18 @@ import Fastify, {
 } from 'fastify';
 import { ZodError } from 'zod';
 import type { BotManager } from '../adapters/discord/botManager';
+import type { AiService } from '../core/ai/aiService';
 import type { LogBus } from '../core/logs/logBus';
 import type { DatabaseHandle } from '../db/client';
 import type { Env } from '../env';
 import { AppError } from '../lib/appError';
 import type { AuthService } from '../services/authService';
+import type { ConfigService } from '../services/configService';
 import type { SecretsService } from '../services/secretsService';
 import { registerRealtimeRoutes } from './realtime';
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from './routes/auth';
 import { registerBotRoutes } from './routes/bot';
+import { registerConfigRoutes } from './routes/config';
 import { registerHealthRoute } from './routes/health';
 import { registerLogsRoutes } from './routes/logs';
 import { registerSecretsRoutes } from './routes/secrets';
@@ -30,12 +33,14 @@ export interface AppDeps {
   logBus: LogBus;
   auth: AuthService;
   secrets: SecretsService;
+  config: ConfigService;
+  ai: AiService;
   bot: BotManager;
 }
 
 /** Ne lance pas l'écoute : les tests passent par `app.inject()`. */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const { env, database, logBus, auth, secrets, bot } = deps;
+  const { env, database, logBus, auth, secrets, config, ai, bot } = deps;
   const app = Fastify({
     logger: loggerOptions(env),
     bodyLimit: 1024 * 1024,
@@ -104,6 +109,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerSecretsRoutes(protectedApp, secrets);
     registerLogsRoutes(protectedApp, logBus);
     registerBotRoutes(protectedApp, bot);
+    registerConfigRoutes(protectedApp, config, ai);
     registerRealtimeRoutes(protectedApp, logBus, bot, auth);
   });
 

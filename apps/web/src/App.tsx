@@ -6,6 +6,7 @@ import { AuthScreen } from '@/components/AuthScreen';
 import { Button } from '@/components/ui/button';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { authStateQuery } from '@/lib/api';
+import { BehaviorPage } from '@/pages/BehaviorPage';
 import { BotPage } from '@/pages/BotPage';
 import { ConsolePage } from '@/pages/ConsolePage';
 import { LoginPage } from '@/pages/LoginPage';
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/bot" replace /> },
       { path: 'bot', element: <BotPage /> },
+      { path: 'comportement', element: <BehaviorPage /> },
       { path: 'console', element: <ConsolePage /> },
       { path: 'parametres', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/bot" replace /> },

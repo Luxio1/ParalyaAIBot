@@ -1,0 +1,57 @@
+import { DISCORD_MAX_MESSAGE_LENGTH } from '@bot/shared';
+import { cleanContent, type Message } from 'discord.js';
+import type { IncomingMessage, Transport } from '../../core/pipeline/messagePipeline';
+import { chunkText } from '../../lib/chunkText';
+
+/** Discord efface l'indicateur au bout de 10 s ; il faut le renvoyer tant que la réponse se prépare. */
+const TYPING_REFRESH_MS = 8_000;
+
+/** `null` pour les messages à ignorer d'emblée : bots (dont lui-même) et messages système. */
+export function toIncomingMessage(message: Message, botId: string): IncomingMessage | null {
+  if (message.author.bot || message.system) return null;
+  const { channel } = message;
+  // Mentionner le rôle automatique du bot revient à le mentionner (confusion fréquente dans l'autocomplétion).
+  const botRoleId = message.guild?.members.me?.roles.botRole?.id;
+  const mentionsBot =
+    message.mentions.users.has(botId) ||
+    (botRoleId !== undefined && message.mentions.roles.has(botRoleId));
+
+  let withoutBot = message.content.replaceAll(`<@${botId}>`, ' ').replaceAll(`<@!${botId}>`, ' ');
+  if (botRoleId) withoutBot = withoutBot.replaceAll(`<@&${botRoleId}>`, ' ');
+
+  return {
+    id: message.id,
+    text: cleanContent(withoutBot, channel).trim(),
+    author: {
+      id: message.author.id,
+      displayName: message.member?.displayName ?? message.author.displayName,
+    },
+    isDM: channel.isDMBased(),
+    channelId: channel.isDMBased() ? null : channel.isThread() ? channel.parentId : channel.id,
+    channelName: 'name' in channel && channel.name ? channel.name : 'MP',
+    mentionsBot,
+    repliesToBot: message.mentions.repliedUser?.id === botId,
+  };
+}
+
+export function discordTransport(message: Message): Transport {
+  return {
+    async reply(text) {
+      // Le texte vient de l'IA : il ne doit notifier personne, sauf l'auteur de la question.
+      const [first = '', ...rest] = chunkText(text, DISCORD_MAX_MESSAGE_LENGTH);
+      await message.reply({ content: first, allowedMentions: { parse: [], repliedUser: true } });
+      if (!message.channel.isSendable()) return;
+      for (const chunk of rest) {
+        await message.channel.send({ content: chunk, allowedMentions: { parse: [] } });
+      }
+    },
+    startTyping() {
+      const { channel } = message;
+      if (!channel.isSendable()) return () => undefined;
+      const send = () => void channel.sendTyping().catch(() => undefined);
+      send();
+      const timer = setInterval(send, TYPING_REFRESH_MS);
+      return () => clearInterval(timer);
+    },
+  };
+}

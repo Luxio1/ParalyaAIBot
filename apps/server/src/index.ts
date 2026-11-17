@@ -1,11 +1,15 @@
 import { APP_NAME, APP_VERSION } from '@bot/shared';
 import { BotManager } from './adapters/discord/botManager';
+import { AiService } from './core/ai/aiService';
+import { GeminiProvider } from './core/ai/providers/gemini';
 import { LogBus } from './core/logs/logBus';
+import { MessagePipeline } from './core/pipeline/messagePipeline';
 import { openDatabase } from './db/client';
 import { runMigrations } from './db/migrate';
 import { EnvError, findRootDir, loadDotEnv, parseEnv } from './env';
 import { buildApp } from './http/app';
 import { AuthService } from './services/authService';
+import { ConfigService } from './services/configService';
 import { SecretsService } from './services/secretsService';
 
 async function main(): Promise<void> {
@@ -24,8 +28,14 @@ async function main(): Promise<void> {
     { geminiApiKey: env.geminiApiKey },
     logBus,
   );
-  const bot = new BotManager(database.db, secrets, logBus);
-  const app = await buildApp({ env, database, logBus, auth, secrets, bot });
+  const config = new ConfigService(database.db, logBus);
+  const ai = new AiService(new GeminiProvider(() => secrets.get('geminiApiKey')));
+  secrets.onChange((name) => {
+    if (name === 'geminiApiKey') ai.clearModelCache();
+  });
+  const pipeline = new MessagePipeline(() => config.get(), ai, logBus);
+  const bot = new BotManager(database.db, secrets, logBus, pipeline);
+  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, bot });
   app.log.info(`${APP_NAME} v${APP_VERSION}, base de données : ${env.databaseFile}`);
 
   let closing = false;
