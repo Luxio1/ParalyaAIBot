@@ -87,6 +87,7 @@ En cas de doute sur un commentaire, un helper ou un paramètre : ne pas l'ajoute
 - Format : commit conventionnel avec gitmoji après les deux-points, sujet court et au plus une ou deux phrases. Exemple : `feat(server): ✨ Ajoute la route /healthz`.
 - Gitmojis : 🐛 fix, ✨ feature, 📝 docs, ♻️ refactor, 🔥 suppression, 🚀 build, 🎨 style, ✅ tests, 🔧 chore, 🚧 WIP, ⚡️ perf, 👷 CI.
 - Jamais de ligne `Claude-Session:` ni de lien de session dans un commit ou une pull request.
+- Une branche par jalon (`jN-sujet`). Quand l'utilisateur valide le jalon et demande le commit, Claude fusionne lui-même la branche dans `main` (`git merge --no-ff`) et pousse `main`, sans passer par une PR GitHub.
 
 ## Style des échanges
 - Direct, concis, technique. Pas de formules de politesse, d'annonces ni d'avertissements de principe. Ne pas s'excuser : corriger.
