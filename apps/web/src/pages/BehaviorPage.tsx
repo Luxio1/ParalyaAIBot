@@ -1,6 +1,5 @@
 import {
   aiModelSchema,
-  botConfigSchema,
   discordIdSchema,
   PERSONA_PRESETS,
   SYSTEM_PROMPT_MAX_LENGTH,
@@ -14,6 +13,7 @@ import { X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
+import { Choice } from '@/components/Choice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,10 +22,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useRealtime } from '@/hooks/useRealtime';
-import { apiGet, apiSend, botDiscoveryQuery } from '@/lib/api';
+import { apiGet, apiSend, botDiscoveryQuery, configQuery } from '@/lib/api';
 import { cn } from '@/lib/utils';
-
-const CONFIG_QUERY_KEY = ['config'];
 
 const RETENTION_CHOICES = [
   [5, '5 minutes'],
@@ -38,10 +36,7 @@ const RETENTION_CHOICES = [
 ] as const;
 
 export function BehaviorPage() {
-  const saved = useQuery({
-    queryKey: CONFIG_QUERY_KEY,
-    queryFn: () => apiGet('/api/config', botConfigSchema),
-  });
+  const saved = useQuery(configQuery);
   if (saved.isError) return <p className="text-destructive text-sm">{saved.error.message}</p>;
   if (!saved.data) return null;
   // La clé remet le formulaire à zéro quand la version enregistrée change.
@@ -57,7 +52,7 @@ function BehaviorForm({ saved }: { saved: BotConfig }) {
     mutationFn: () => apiSend('PUT', '/api/config', draft),
     onSuccess: () => {
       toast.success("Réglages enregistrés : ils s'appliquent dès le prochain message.");
-      queryClient.setQueryData(CONFIG_QUERY_KEY, draft);
+      queryClient.setQueryData(configQuery.queryKey, draft);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -209,39 +204,6 @@ function Section(props: { title: string; description?: string; children: ReactNo
 
 function Hint({ children }: { children: ReactNode }) {
   return <p className="text-muted-foreground text-xs">{children}</p>;
-}
-
-function Choice<T extends string>(props: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label={props.label}
-      className="flex flex-wrap gap-1 rounded-md border p-1"
-    >
-      {props.options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={option.value === props.value}
-          onClick={() => props.onChange(option.value)}
-          className={cn(
-            'flex-1 rounded px-3 py-1.5 text-sm whitespace-nowrap',
-            option.value === props.value
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function ChannelPicker(props: { selected: string[]; onChange: (ids: string[]) => void }) {

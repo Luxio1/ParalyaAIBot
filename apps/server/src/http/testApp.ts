@@ -10,6 +10,7 @@ import { openDatabase, type DatabaseHandle } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { parseEnv } from '../env';
 import { AuthService } from '../services/authService';
+import { CommandService } from '../services/commandService';
 import { ConfigService } from '../services/configService';
 import { SecretsService } from '../services/secretsService';
 import { buildApp } from './app';
@@ -32,6 +33,7 @@ export interface TestApp {
   config: ConfigService;
   aiProvider: FakeAiProvider;
   memory: SessionStore;
+  commands: CommandService;
   bot: BotManager;
   discord: FakeDiscord;
   /** Construit une nouvelle application sur la même base, comme après un redémarrage. */
@@ -51,9 +53,21 @@ export async function createTestApp(
   const aiProvider = new FakeAiProvider();
   const ai = new AiService(aiProvider);
   const memory = new SessionStore();
-  const pipeline = new MessagePipeline(() => config.get(), ai, memory, logBus);
+  const commands = new CommandService(database.db, logBus);
+  const pipeline = new MessagePipeline(() => config.get(), ai, memory, commands, logBus);
   const bot = new BotManager(database.db, secrets, logBus, pipeline, discord.createClient);
-  const app = await buildApp({ env, database, logBus, auth, secrets, config, ai, memory, bot });
+  const app = await buildApp({
+    env,
+    database,
+    logBus,
+    auth,
+    secrets,
+    config,
+    ai,
+    memory,
+    commands,
+    bot,
+  });
   return {
     app,
     database,
@@ -63,6 +77,7 @@ export async function createTestApp(
     config,
     aiProvider,
     memory,
+    commands,
     bot,
     discord,
     async restart() {

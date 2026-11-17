@@ -1,9 +1,16 @@
-import type { BotConfig } from '@bot/shared';
+import type { BotConfig, Command } from '@bot/shared';
 import { AiError, type AiImage } from '../ai/aiProvider';
 import type { AiService } from '../ai/aiService';
 import { gatherContext, type MessageContext } from '../enrich/context';
 import type { LogBus } from '../logs/logBus';
 import type { SessionInfo, SessionStore } from '../memory/sessionStore';
+import {
+  applyTemplate,
+  commandList,
+  expandStatic,
+  matchCommand,
+  type CommandCatalog,
+} from './commands';
 
 export interface Attachment {
   url: string;
@@ -54,6 +61,13 @@ const DEDUP_SIZE = 1000;
 const LOG_PREVIEW_LENGTH = 80;
 const DEFAULT_QUESTION = 'Réagis au contenu joint.';
 
+/** Ce qui part à l'IA, avec ce qui en est gardé en mémoire. */
+interface Question {
+  text: string;
+  persona: string;
+  memoryText: string;
+}
+
 export class MessagePipeline {
   /** Identifiants déjà traités, du plus ancien au plus récent. */
   readonly #seen = new Set<string>();
@@ -62,6 +76,7 @@ export class MessagePipeline {
     private readonly getConfig: () => BotConfig,
     private readonly ai: AiService,
     private readonly memory: SessionStore,
+    private readonly commands: CommandCatalog,
     private readonly logBus: LogBus,
   ) {}
 
@@ -69,19 +84,62 @@ export class MessagePipeline {
   async handle(message: IncomingMessage, transport: Transport): Promise<void> {
     if (this.#alreadySeen(message.id)) return;
     const config = this.getConfig();
-    const query = extractQuery(message, config);
-    if (query === null) return;
-    if (query === '' && message.attachments.length === 0 && !message.isReply) {
-      await this.#send(transport, helpMessage(config), message);
+    const trigger = extractTrigger(message, config);
+    if (!trigger) return;
+
+    const where = message.isDM ? 'en MP' : `dans #${message.channelName}`;
+    const hasContent = message.attachments.length > 0 || message.isReply;
+    const call = trigger.viaPrefix ? matchCommand(trigger.text, this.commands) : null;
+
+    if (call) {
+      const { command, argument } = call;
+      const invocation = `${config.prefix}${command.name}`;
+      this.logBus.push('command', `@${message.author.displayName} ${where} : ${invocation}`);
+      if (command.type === 'static') {
+        const values = {
+          prefix: config.prefix,
+          user: message.author.displayName,
+          commands: this.commands.enabled(),
+        };
+        await this.#send(transport, expandStatic(command.response, values), message);
+        return;
+      }
+      if (!argument && !hasContent) {
+        await this.#send(transport, `Utilisation : \`${invocation} <texte>\``, message);
+        return;
+      }
+      const subject = argument || (message.isReply ? 'le message cité' : DEFAULT_QUESTION);
+      await this.#answer(message, transport, config, {
+        text: applyTemplate(command.promptTemplate, subject),
+        persona: command.systemPrompt || config.systemPrompt,
+        memoryText: `${invocation} ${argument}`.trim(),
+      });
       return;
     }
 
-    const where = message.isDM ? 'en MP' : `dans #${message.channelName}`;
+    if (trigger.text === '' && !hasContent) {
+      await this.#send(transport, helpMessage(config, this.commands.enabled()), message);
+      return;
+    }
     this.logBus.push(
       message.isDM ? 'dm' : 'discord',
-      `@${message.author.displayName} ${where} : « ${preview(query || '(sans texte)')} »`,
+      `@${message.author.displayName} ${where} : « ${preview(trigger.text || '(sans texte)')} »`,
     );
+    await this.#answer(message, transport, config, {
+      text: trigger.text,
+      persona: config.systemPrompt,
+      memoryText: trigger.text,
+    });
+  }
 
+  async #answer(
+    message: IncomingMessage,
+    transport: Transport,
+    config: BotConfig,
+    question: Question,
+  ): Promise<void> {
+    const query = question.text;
+    const where = message.isDM ? 'en MP' : `dans #${message.channelName}`;
     const session = sessionInfo(message);
     const retentionMs = config.memoryRetentionMinutes * 60_000;
     const stopTyping = transport.startTyping();
@@ -95,7 +153,7 @@ export class MessagePipeline {
       const history = config.memoryEnabled ? this.memory.history(session.id, retentionMs) : [];
       answer = await this.ai.generate({
         model: config.model,
-        systemPrompt: systemPrompt(config, message, context.images),
+        systemPrompt: systemPrompt(question.persona, message, context.images),
         history,
         prompt: buildPrompt(query, context),
         images: context.images,
@@ -117,7 +175,7 @@ export class MessagePipeline {
       this.memory.append(
         session,
         [
-          { role: 'user', text: memoryText(query, context) },
+          { role: 'user', text: memoryText(question.memoryText, context) },
           { role: 'model', text: answer },
         ],
         config.memoryMaxMessages,
@@ -150,25 +208,28 @@ export class MessagePipeline {
 }
 
 /**
- * Question adressée au bot, `''` si le déclencheur est vide, `null` si le message ne le concerne pas.
- * En MP, tout message s'adresse au bot.
+ * Texte adressé au bot (sans le préfixe), ou `null` si le message ne le concerne pas.
+ * En MP, tout message s'adresse au bot ; le préfixe y permet aussi les commandes.
  */
-export function extractQuery(message: IncomingMessage, config: BotConfig): string | null {
+export function extractTrigger(
+  message: IncomingMessage,
+  config: BotConfig,
+): { text: string; viaPrefix: boolean } | null {
   const text = message.text.trim();
   const hasPrefix = text.startsWith(config.prefix);
   const withoutPrefix = hasPrefix ? text.slice(config.prefix.length).trim() : text;
 
-  if (message.isDM) return config.allowDMs ? withoutPrefix : null;
+  if (message.isDM) return config.allowDMs ? { text: withoutPrefix, viaPrefix: hasPrefix } : null;
 
   if (config.channelMode === 'whitelist') {
     if (!message.channelId || !config.allowedChannelIds.includes(message.channelId)) return null;
   }
-  const byPrefix = config.triggerMode !== 'mention' && hasPrefix;
+  if (config.triggerMode !== 'mention' && hasPrefix) {
+    return { text: withoutPrefix, viaPrefix: true };
+  }
   const byMention =
     config.triggerMode !== 'prefix' && (message.mentionsBot || message.repliesToBot);
-  if (byPrefix) return withoutPrefix;
-  if (byMention) return text;
-  return null;
+  return byMention ? { text, viaPrefix: false } : null;
 }
 
 /** Une conversation par personne en MP, par couple salon et personne sur un serveur. */
@@ -188,18 +249,20 @@ function sessionInfo(message: IncomingMessage): SessionInfo {
       };
 }
 
-function helpMessage(config: BotConfig): string {
+function helpMessage(config: BotConfig, commands: Command[]): string {
   const how =
     config.triggerMode === 'mention'
       ? 'mentionnez-moi suivi de votre question'
       : `écrivez votre question après « ${config.prefix} »`;
-  return `Bonjour ! Pour me poser une question, ${how}.`;
+  const help = `Bonjour ! Pour me poser une question, ${how}.`;
+  if (config.triggerMode === 'mention' || commands.length === 0) return help;
+  return `${help}\n\n**Commandes :**\n${commandList(commands, config.prefix)}`;
 }
 
-function systemPrompt(config: BotConfig, message: IncomingMessage, images: AiImage[]): string {
+function systemPrompt(persona: string, message: IncomingMessage, images: AiImage[]): string {
   const where = message.isDM ? 'en message privé' : `dans le salon #${message.channelName}`;
   const lines = [
-    config.systemPrompt,
+    persona,
     '',
     `Tu es un bot Discord. Tu réponds à ${message.author.displayName} (@${message.author.username}) ${where} ; tu peux l'appeler par son pseudo.`,
     'Rédige directement ta réponse, sans préambule ni commentaire sur ta réponse. Tu peux utiliser le Markdown de Discord.',

@@ -1,6 +1,14 @@
 import { APP_NAME } from '@bot/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Brain, LogOut, Settings, SlidersHorizontal, SquareTerminal } from 'lucide-react';
+import {
+  Bot,
+  Brain,
+  LogOut,
+  Settings,
+  SlidersHorizontal,
+  SquareSlash,
+  SquareTerminal,
+} from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { BotStateDot } from '@/components/BotStateDot';
 import { Button } from '@/components/ui/button';
@@ -11,6 +19,7 @@ import { cn } from '@/lib/utils';
 const NAV_ITEMS = [
   { to: '/bot', label: 'Bot', icon: Bot },
   { to: '/comportement', label: 'Comportement', icon: SlidersHorizontal },
+  { to: '/commandes', label: 'Commandes', icon: SquareSlash },
   { to: '/memoire', label: 'Mémoire', icon: Brain },
   { to: '/console', label: 'Console', icon: SquareTerminal },
   { to: '/parametres', label: 'Paramètres', icon: Settings },

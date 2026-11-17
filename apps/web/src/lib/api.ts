@@ -1,6 +1,8 @@
 import {
   apiErrorSchema,
   authStateSchema,
+  botConfigSchema,
+  commandSchema,
   discoveredGuildSchema,
   memorySessionSchema,
 } from '@bot/shared';
@@ -41,6 +43,16 @@ export const authStateQuery = queryOptions({
 });
 
 export const BOT_DISCOVERY_QUERY_KEY = ['bot', 'discovery'];
+
+export const configQuery = queryOptions({
+  queryKey: ['config'],
+  queryFn: () => apiGet('/api/config', botConfigSchema),
+});
+
+export const commandsQuery = queryOptions({
+  queryKey: ['commands'],
+  queryFn: () => apiGet('/api/commands', commandSchema.array()),
+});
 
 export const memorySessionsQuery = queryOptions({
   queryKey: ['memory', 'sessions'],
