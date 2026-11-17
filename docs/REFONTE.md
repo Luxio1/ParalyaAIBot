@@ -80,7 +80,7 @@ ParalyaAIBot/
 - [x] **J3 Pipeline & IA** — modes Mention/Préfixe (+ Reply sur le bot), préfixe, whitelist, MP, dédup, typing, découpage 2000, mentions, providers, modèle, persona + presets. *Validation : réponses correctes dans chaque mode.*
 - [x] **J4 Mémoire & enrichissements** — SessionStore, moniteur + purge, message cité, vision, liens, `safeFetch`. *Validation : conversation suivie, image et lien analysés.*
 - [x] **J5 Commandes** — CRUD + dupliquer, statique / IA, repli IA, aide préfixe seul, restauration des exemples.
-- [ ] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
+- [x] **J6 Rate limit & relais MP** — quota/cooldown, avertissement/silence, exemptions, DM relay.
 - [ ] **J7 Moteur d'événements** — règles, évaluation groupée (modèle rapide configurable), filtres, cooldowns, actions, variables, anti-doublon, testeur.
 - [ ] **J8 Playground & Guide** — simulateur sur le pipeline commun, onglet Guide Developer Portal.
 - [ ] **J9 Durcissement & déploiement** — tests, import legacy, sauvegarde DB, README déploiement VPS/Railway/Fly, revue sécurité.
@@ -155,3 +155,11 @@ ParalyaAIBot/
 - **Variables des réponses statiques** : `{commands}` (liste générée des commandes actives, que l'ancien `!help` écrivait à la main), `{prefix}`, `{user}`. Le préfixe seul affiche aussi cette liste.
 - **Modèle IA sans `{query}`** : le texte de l'utilisateur est ajouté à la fin au lieu d'être perdu. La consigne de la commande remplace le persona ; mémoire, images, liens et message cité s'appliquent comme pour une question libre. La mémoire garde l'appel tel qu'écrit (`!traduis bonjour`).
 - **Duplication** : la copie (`nom-copie`, `nom-copie-2`...) est désactivée, pour ne pas répondre deux fois avant d'avoir été modifiée.
+
+### J6 Rate limit & relais MP (2026-11-17)
+- **Quota en fenêtre glissante** (`core/ratelimit/rateLimiter.ts`) : N questions par période de X secondes et par personne (3 par 60 s par défaut, 1 à 50 et 5 à 3 600 s), serveurs et MP confondus. L'ancien compteur ne se réinitialisait qu'après un blocage : trois questions espacées sur une journée suffisaient. Les messages refusés ne prolongent pas le blocage.
+- **Tout ce à quoi le bot répond compte**, commandes statiques comprises ; le message d'aide (préfixe seul) ne compte pas.
+- **Avertissement unique** par période de blocage, avec le temps restant, ou silence (`rateLimitNotify`). L'ancien bot répondait à chaque message bloqué, ce qui amplifiait le spam. La console note le premier refus.
+- **Exemptions** : propriétaires de serveur (toujours, sans réglage), rôles par ID (`bypassRoleIds`, renommer un rôle ne casse rien), utilisateurs par ID ou nom d'utilisateur Discord unique (`bypassUsers`, `@Pseudo` rangé en `pseudo`). Plus d'exemption par pseudo d'affichage, que chacun peut changer. En MP, les rôles sont demandés à Discord (`members.fetch`, sans intent privilégié) et gardés 5 minutes.
+- **Retranscription des MP** (`adapters/discord/dmRelay.ts`) : tous les MP reçus, même quand le bot n'y répond pas, et chaque réponse du bot en MP (y compris avertissements et commandes). Citations Markdown, pièces jointes en liens, découpage à 2 000 caractères, `allowedMentions: { parse: [] }` : un MP contenant `@everyone` ne notifie plus tout le salon du staff. Salon obligatoire quand le relais est activé ; un salon inaccessible est signalé dans la console.
+- **`MessagePipeline`** reçoit ses dépendances dans un objet (`PipelineDeps`) ; `Transport.isExempt(roleIds)` laisse l'adaptateur vérifier propriétaires et rôles.

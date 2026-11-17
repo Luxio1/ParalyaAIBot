@@ -1,4 +1,4 @@
-import type { BotState, BotStatus, DiscoveredGuild, ServerEvent } from '@bot/shared';
+import type { BotConfig, BotState, BotStatus, DiscoveredGuild, ServerEvent } from '@bot/shared';
 import {
   Client,
   DiscordjsErrorCodes,
@@ -17,6 +17,7 @@ import { BOT_SETTINGS_ID, botSettings } from '../../db/schema';
 import type { SecretsService } from '../../services/secretsService';
 import { discoverGuilds } from './discovery';
 import { discordTransport, toIncomingMessage } from './discordTransport';
+import { formatBotReply, formatIncomingDm, sendToRelay } from './dmRelay';
 
 type BotEvent = Extract<ServerEvent, { type: 'bot:status' | 'bot:discovery-changed' }>;
 
@@ -76,6 +77,7 @@ export class BotManager {
     private readonly secrets: SecretsService,
     private readonly logBus: LogBus,
     private readonly pipeline: MessagePipeline,
+    private readonly getConfig: () => BotConfig,
     private readonly createClient: () => Client = createDiscordClient,
   ) {
     secrets.onChange((name) => {
@@ -225,10 +227,26 @@ export class BotManager {
     client.on(Events.MessageCreate, (message) => {
       const botId = client.user?.id;
       const incoming = botId && toIncomingMessage(message, botId);
-      if (incoming) void this.pipeline.handle(incoming, discordTransport(message, botId));
+      if (!incoming) return;
+      let onReplied: ((text: string) => void) | undefined;
+      if (incoming.isDM) {
+        this.#relay(formatIncomingDm(incoming.author, message.content, incoming.attachments));
+        onReplied = (text) => this.#relay(formatBotReply(incoming.author, text));
+      }
+      void this.pipeline.handle(incoming, discordTransport(message, botId, onReplied));
     });
     client.on(Events.Error, (error) => {
       this.logBus.push('error', `Erreur Discord : ${error.message}`);
+    });
+  }
+
+  /** Retranscription des MP dans le salon du staff, si elle est activée. */
+  #relay(content: string): void {
+    const { dmRelayEnabled, dmRelayChannelId } = this.getConfig();
+    if (!dmRelayEnabled || !dmRelayChannelId || !this.#client) return;
+    sendToRelay(this.#client, dmRelayChannelId, content).catch((error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logBus.push('error', `Retranscription des MP impossible : ${reason}.`);
     });
   }
 

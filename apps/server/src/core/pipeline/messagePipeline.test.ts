@@ -8,6 +8,7 @@ import { runMigrations } from '../../db/migrate';
 import { CommandService } from '../../services/commandService';
 import { LogBus } from '../logs/logBus';
 import { SessionStore } from '../memory/sessionStore';
+import { RateLimiter } from '../ratelimit/rateLimiter';
 import {
   AI_FAILURE_REPLY,
   MessagePipeline,
@@ -19,6 +20,7 @@ import {
 
 const CHANNEL = '100000000000000001';
 const OTHER_CHANNEL = '100000000000000002';
+const EXEMPT_ROLE = '300000000000000001';
 const GIF: Attachment = {
   url: 'https://cdn.exemple/a.gif',
   name: 'a.gif',
@@ -53,6 +55,8 @@ describe('MessagePipeline', () => {
   let quoted: QuotedMessage | null;
   let replies: string[];
   let transport: Transport;
+  /** Simule une personne qui porte le rôle `EXEMPT_ROLE`. */
+  let exemptRoleHolder: boolean;
 
   beforeEach(() => {
     config = DEFAULT_BOT_CONFIG;
@@ -62,19 +66,22 @@ describe('MessagePipeline', () => {
     const database = openDatabase(':memory:');
     runMigrations(database.db);
     commands = new CommandService(database.db, logBus);
-    pipeline = new MessagePipeline(
-      () => config,
-      new AiService(aiProvider),
+    pipeline = new MessagePipeline({
+      getConfig: () => config,
+      ai: new AiService(aiProvider),
       memory,
       commands,
+      rateLimiter: new RateLimiter(),
       logBus,
-    );
+    });
     quoted = null;
+    exemptRoleHolder = false;
     replies = [];
     transport = {
       reply: async (text) => void replies.push(text),
       startTyping: () => () => undefined,
       fetchQuoted: async () => quoted,
+      isExempt: async (roleIds) => exemptRoleHolder && roleIds.includes(EXEMPT_ROLE),
     };
   });
 
@@ -274,5 +281,52 @@ describe('MessagePipeline', () => {
       'Contenus inaccessibles : pièce jointe a.gif (format image/gif non pris en charge) ; lien http://localhost/admin (adresse non publique refusée',
     );
     expect(aiProvider.requests[0]?.images).toEqual([]);
+  });
+
+  describe('limitation de fréquence', () => {
+    const RATE_LIMITED: Partial<BotConfig> = {
+      rateLimitEnabled: true,
+      rateLimitMaxRequests: 2,
+      rateLimitWindowSeconds: 30,
+    };
+    const ask = (author?: IncomingMessage['author']) =>
+      handle({ text: 'question', mentionsBot: true, ...(author ? { author } : {}) });
+
+    it("bloque au-delà du quota et ne prévient qu'une fois", async () => {
+      configure(RATE_LIMITED);
+      for (let i = 0; i < 4; i++) await ask();
+
+      expect(aiProvider.requests).toHaveLength(2);
+      expect(replies.slice(2)).toEqual([
+        '⏳ Limite atteinte : 2 question(s) par 30 s. Réessayez dans 30 s.',
+      ]);
+      expect(logBus.entries().filter((entry) => entry.type === 'cooldown')).toHaveLength(1);
+    });
+
+    it("reste silencieux si l'avertissement est désactivé, sans compter le message d'aide", async () => {
+      configure({ ...RATE_LIMITED, rateLimitMaxRequests: 1, rateLimitNotify: false });
+      await handle({ text: '!' });
+      await ask();
+      await ask();
+      expect(aiProvider.requests).toHaveLength(1);
+      expect(replies).toHaveLength(2);
+    });
+
+    it('exempte les utilisateurs listés par ID ou par nom, et les porteurs de rôles exemptés', async () => {
+      configure({
+        ...RATE_LIMITED,
+        rateLimitMaxRequests: 1,
+        bypassUsers: ['alice', '200000000000000003'],
+        bypassRoleIds: [EXEMPT_ROLE],
+      });
+      const carol = { id: '200000000000000003', username: 'carol', displayName: 'Carol' };
+      const dave = { id: '200000000000000004', username: 'dave', displayName: 'Dave' };
+      for (let i = 0; i < 3; i++) await ask();
+      for (let i = 0; i < 3; i++) await ask(carol);
+      exemptRoleHolder = true;
+      for (let i = 0; i < 3; i++) await ask(dave);
+
+      expect(aiProvider.requests).toHaveLength(9);
+    });
   });
 });

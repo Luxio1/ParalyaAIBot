@@ -4,6 +4,7 @@ import { AiService } from './core/ai/aiService';
 import { GeminiProvider } from './core/ai/providers/gemini';
 import { LogBus } from './core/logs/logBus';
 import { SessionStore } from './core/memory/sessionStore';
+import { RateLimiter } from './core/ratelimit/rateLimiter';
 import { MessagePipeline } from './core/pipeline/messagePipeline';
 import { openDatabase } from './db/client';
 import { runMigrations } from './db/migrate';
@@ -37,10 +38,15 @@ async function main(): Promise<void> {
   });
   const memory = new SessionStore();
   // Les conversations expirées disparaissent du moniteur sans attendre un nouveau message.
-  setInterval(() => memory.sweep(config.get().memoryRetentionMinutes * 60_000), 30_000).unref();
+  const rateLimiter = new RateLimiter();
+  setInterval(() => {
+    memory.sweep(config.get().memoryRetentionMinutes * 60_000);
+    rateLimiter.sweep(config.get().rateLimitWindowSeconds * 1000);
+  }, 30_000).unref();
   const commands = new CommandService(database.db, logBus);
-  const pipeline = new MessagePipeline(() => config.get(), ai, memory, commands, logBus);
-  const bot = new BotManager(database.db, secrets, logBus, pipeline);
+  const getConfig = () => config.get();
+  const pipeline = new MessagePipeline({ getConfig, ai, memory, commands, rateLimiter, logBus });
+  const bot = new BotManager(database.db, secrets, logBus, pipeline, getConfig);
   const app = await buildApp({
     env,
     database,
