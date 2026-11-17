@@ -11,6 +11,7 @@ import { ZodError } from 'zod';
 import type { BotManager } from '../adapters/discord/botManager';
 import type { AiService } from '../core/ai/aiService';
 import type { LogBus } from '../core/logs/logBus';
+import type { SessionStore } from '../core/memory/sessionStore';
 import type { DatabaseHandle } from '../db/client';
 import type { Env } from '../env';
 import { AppError } from '../lib/appError';
@@ -23,6 +24,7 @@ import { registerBotRoutes } from './routes/bot';
 import { registerConfigRoutes } from './routes/config';
 import { registerHealthRoute } from './routes/health';
 import { registerLogsRoutes } from './routes/logs';
+import { registerMemoryRoutes } from './routes/memory';
 import { registerSecretsRoutes } from './routes/secrets';
 import { SESSION_COOKIE } from './session';
 import { registerStatic } from './static';
@@ -35,12 +37,13 @@ export interface AppDeps {
   secrets: SecretsService;
   config: ConfigService;
   ai: AiService;
+  memory: SessionStore;
   bot: BotManager;
 }
 
 /** Ne lance pas l'écoute : les tests passent par `app.inject()`. */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const { env, database, logBus, auth, secrets, config, ai, bot } = deps;
+  const { env, database, logBus, auth, secrets, config, ai, memory, bot } = deps;
   const app = Fastify({
     logger: loggerOptions(env),
     bodyLimit: 1024 * 1024,
@@ -109,8 +112,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerSecretsRoutes(protectedApp, secrets);
     registerLogsRoutes(protectedApp, logBus);
     registerBotRoutes(protectedApp, bot);
-    registerConfigRoutes(protectedApp, config, ai);
-    registerRealtimeRoutes(protectedApp, logBus, bot, auth);
+    registerConfigRoutes(protectedApp, config, ai, memory);
+    registerMemoryRoutes(protectedApp, memory, config, logBus);
+    registerRealtimeRoutes(protectedApp, logBus, bot, memory, auth);
   });
 
   const hasWeb = await registerStatic(app, env.webDistDir);

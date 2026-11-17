@@ -1,7 +1,7 @@
 import { LOG_BUFFER_SIZE, serverEventSchema, type BotStatus, type LogEntry } from '@bot/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { authStateQuery, BOT_DISCOVERY_QUERY_KEY } from '@/lib/api';
+import { authStateQuery, BOT_DISCOVERY_QUERY_KEY, memorySessionsQuery } from '@/lib/api';
 
 const MAX_RETRY_DELAY_MS = 10_000;
 
@@ -54,6 +54,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             return;
           case 'bot:discovery-changed':
             return refreshDiscovery();
+          case 'memory:changed':
+            return void queryClient.invalidateQueries({
+              queryKey: memorySessionsQuery.queryKey,
+            });
         }
       };
       socket.onclose = () => {

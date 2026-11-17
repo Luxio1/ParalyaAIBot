@@ -1,4 +1,9 @@
-import { apiErrorSchema, authStateSchema, discoveredGuildSchema } from '@bot/shared';
+import {
+  apiErrorSchema,
+  authStateSchema,
+  discoveredGuildSchema,
+  memorySessionSchema,
+} from '@bot/shared';
 import { queryOptions } from '@tanstack/react-query';
 
 export class ApiError extends Error {
@@ -36,6 +41,11 @@ export const authStateQuery = queryOptions({
 });
 
 export const BOT_DISCOVERY_QUERY_KEY = ['bot', 'discovery'];
+
+export const memorySessionsQuery = queryOptions({
+  queryKey: ['memory', 'sessions'],
+  queryFn: () => apiGet('/api/memory/sessions', memorySessionSchema.array()),
+});
 
 export const botDiscoveryQuery = queryOptions({
   queryKey: BOT_DISCOVERY_QUERY_KEY,

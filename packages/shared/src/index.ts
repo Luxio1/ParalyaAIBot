@@ -11,5 +11,6 @@ export * from './schemas/bot';
 export * from './schemas/botConfig';
 export * from './schemas/health';
 export * from './schemas/logs';
+export * from './schemas/memory';
 export * from './schemas/realtime';
 export * from './schemas/secrets';

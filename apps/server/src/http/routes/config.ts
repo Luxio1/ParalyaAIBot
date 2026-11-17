@@ -2,6 +2,7 @@ import { botConfigSchema, type AiModel, type BotConfig } from '@bot/shared';
 import type { FastifyInstance } from 'fastify';
 import { AiError } from '../../core/ai/aiProvider';
 import type { AiService } from '../../core/ai/aiService';
+import type { SessionStore } from '../../core/memory/sessionStore';
 import { AppError } from '../../lib/appError';
 import type { ConfigService } from '../../services/configService';
 
@@ -9,11 +10,14 @@ export function registerConfigRoutes(
   app: FastifyInstance,
   config: ConfigService,
   ai: AiService,
+  memory: SessionStore,
 ): void {
   app.get('/api/config', async (): Promise<BotConfig> => config.get());
 
   app.put('/api/config', async (request, reply) => {
-    config.update(botConfigSchema.parse(request.body));
+    const updated = botConfigSchema.parse(request.body);
+    config.update(updated);
+    if (!updated.memoryEnabled) memory.clear();
     return reply.code(204).send();
   });
 

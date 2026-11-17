@@ -1,5 +1,5 @@
 import type { AiModel } from '@bot/shared';
-import { ApiError, GoogleGenAI } from '@google/genai';
+import { ApiError, GoogleGenAI, type Content } from '@google/genai';
 import { AiError, type AiProvider, type AiRequest } from '../aiProvider';
 
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -11,11 +11,12 @@ export class GeminiProvider implements AiProvider {
   /** La clé est relue à chaque appel : la modifier dans le dashboard s'applique aussitôt. */
   constructor(private readonly getApiKey: () => string | undefined) {}
 
-  async generate({ model, systemPrompt, prompt }: AiRequest): Promise<string> {
+  async generate(request: AiRequest): Promise<string> {
+    const { model, systemPrompt } = request;
     try {
       const response = await this.#getClient().models.generateContent({
         model,
-        contents: prompt,
+        contents: toGeminiContents(request),
         config: { systemInstruction: systemPrompt, httpOptions: { timeout: REQUEST_TIMEOUT_MS } },
       });
       const text = response.text?.trim();
@@ -57,6 +58,17 @@ export class GeminiProvider implements AiProvider {
     }
     return this.#client;
   }
+}
+
+/** L'historique, puis la question avec ses images placées avant le texte (recommandation de Google). */
+export function toGeminiContents({ history, prompt, images }: AiRequest): Content[] {
+  return [
+    ...history.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
+    {
+      role: 'user',
+      parts: [...images.map((image) => ({ inlineData: image })), { text: prompt }],
+    },
+  ];
 }
 
 function toAiError(error: unknown, model?: string): AiError {
