@@ -17,7 +17,14 @@ export class GeminiProvider implements AiProvider {
       const response = await this.#getClient().models.generateContent({
         model,
         contents: toGeminiContents(request),
-        config: { systemInstruction: systemPrompt, httpOptions: { timeout: REQUEST_TIMEOUT_MS } },
+        config: {
+          systemInstruction: systemPrompt,
+          httpOptions: { timeout: REQUEST_TIMEOUT_MS },
+          ...(request.jsonSchema && {
+            responseMimeType: 'application/json',
+            responseJsonSchema: request.jsonSchema,
+          }),
+        },
       });
       const text = response.text?.trim();
       if (!text) {

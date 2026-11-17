@@ -5,13 +5,15 @@ import type { AiProvider, AiRequest } from './aiProvider';
 export class FakeAiProvider implements AiProvider {
   readonly requests: AiRequest[] = [];
   answer = 'Réponse de test.';
+  /** Réponse calculée à partir de la requête ; prioritaire sur `answer`. */
+  respond: ((request: AiRequest) => string) | null = null;
   error: Error | null = null;
   models: AiModel[] = [{ id: 'gemini-test', label: 'Gemini Test' }];
 
   async generate(request: AiRequest): Promise<string> {
     this.requests.push(request);
     if (this.error) throw this.error;
-    return this.answer;
+    return this.respond ? this.respond(request) : this.answer;
   }
 
   async listModels(): Promise<AiModel[]> {

@@ -10,6 +10,7 @@ import { BOT_SETTINGS_ID, botSettings } from '../db/schema';
  */
 export class ConfigService {
   #config: BotConfig;
+  readonly #listeners = new Set<(previous: BotConfig, next: BotConfig) => void>();
 
   constructor(
     private readonly db: Db,
@@ -35,7 +36,15 @@ export class ConfigService {
       .values({ id: BOT_SETTINGS_ID, config })
       .onConflictDoUpdate({ target: botSettings.id, set: { config, updatedAt: new Date() } })
       .run();
+    const previous = this.#config;
     this.#config = config;
     this.logBus.push('system', 'Réglages du bot enregistrés.');
+    for (const listener of this.#listeners) listener(previous, config);
+  }
+
+  /** Renvoie la fonction de désabonnement. */
+  onChange(listener: (previous: BotConfig, next: BotConfig) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
   }
 }

@@ -87,6 +87,20 @@ export const botConfigSchema = z
     bypassUsers: z.array(bypassUserSchema).max(100),
     dmRelayEnabled: z.boolean(),
     dmRelayChannelId: discordIdSchema.nullable(),
+    /** Moteur d'événements : analyse des messages des serveurs par l'IA. */
+    eventsEnabled: z.boolean(),
+    eventsModel: z
+      .string()
+      .trim()
+      .regex(/^[\w.-]{1,100}$/, "Nom de modèle d'analyse invalide."),
+    /** Plafond d'analyses par minute, pour borner le coût sur un serveur actif. */
+    eventsMaxPerMinute: z
+      .number()
+      .int()
+      .min(1, 'Budget : 1 analyse par minute minimum.')
+      .max(600, 'Budget : 600 analyses par minute maximum.'),
+    /** Intent privilégié « Server Members » : nécessaire pour écrire aux membres d'un rôle. */
+    membersIntent: z.boolean(),
   })
   .superRefine((config, ctx) => {
     if (config.dmRelayEnabled && !config.dmRelayChannelId) {
@@ -154,4 +168,8 @@ export const DEFAULT_BOT_CONFIG: BotConfig = {
   bypassUsers: [],
   dmRelayEnabled: false,
   dmRelayChannelId: null,
+  eventsEnabled: false,
+  eventsModel: DEFAULT_AI_MODEL,
+  eventsMaxPerMinute: 30,
+  membersIntent: false,
 };

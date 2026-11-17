@@ -11,13 +11,15 @@ import {
 } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { LogBus } from '../../core/logs/logBus';
-import type { MessagePipeline } from '../../core/pipeline/messagePipeline';
+import type { EventEngine } from '../../core/events/eventEngine';
+import { extractTrigger, type MessagePipeline } from '../../core/pipeline/messagePipeline';
 import type { Db } from '../../db/client';
 import { BOT_SETTINGS_ID, botSettings } from '../../db/schema';
 import type { SecretsService } from '../../services/secretsService';
 import { discoverGuilds } from './discovery';
 import { discordTransport, toIncomingMessage } from './discordTransport';
 import { formatBotReply, formatIncomingDm, sendToRelay } from './dmRelay';
+import { discordEventActions } from './eventActions';
 
 type BotEvent = Extract<ServerEvent, { type: 'bot:status' | 'bot:discovery-changed' }>;
 
@@ -43,16 +45,26 @@ const DISCOVERY_EVENTS = [
 
 const TOKEN_INVALID =
   'Token Discord refusé. Générez-en un nouveau (Developer Portal, onglet Bot, « Reset Token ») et enregistrez-le dans Paramètres.';
-const INTENT_MISSING =
-  'Discord refuse la lecture des messages. Activez « Message Content Intent » (Developer Portal, onglet Bot, section Privileged Gateway Intents), puis redémarrez le bot.';
+export interface ClientOptions {
+  /** Intent privilégié « Server Members », pour écrire aux membres d'un rôle. */
+  membersIntent: boolean;
+}
 
-export function createDiscordClient(): Client {
+function intentMissing(membersIntent: boolean): string {
+  const intents = membersIntent
+    ? '« Message Content Intent » et « Server Members Intent »'
+    : '« Message Content Intent »';
+  return `Discord refuse un accès demandé par le bot. Activez ${intents} (Developer Portal, onglet Bot, section Privileged Gateway Intents), puis redémarrez le bot.`;
+}
+
+export function createDiscordClient({ membersIntent }: ClientOptions): Client {
   return new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.DirectMessages,
+      ...(membersIntent ? [GatewayIntentBits.GuildMembers] : []),
     ],
     // Discord n'envoie pas le salon d'un MP avec le message : sans ce partial, les MP sont ignorés.
     partials: [Partials.Channel],
@@ -77,8 +89,9 @@ export class BotManager {
     private readonly secrets: SecretsService,
     private readonly logBus: LogBus,
     private readonly pipeline: MessagePipeline,
+    private readonly events: EventEngine,
     private readonly getConfig: () => BotConfig,
-    private readonly createClient: () => Client = createDiscordClient,
+    private readonly createClient: (options: ClientOptions) => Client = createDiscordClient,
   ) {
     secrets.onChange((name) => {
       if (name === 'discordToken' && this.#wantsRunning()) {
@@ -137,6 +150,16 @@ export class BotManager {
     });
   }
 
+  /** Reconnecte le bot s'il est censé tourner, par exemple pour changer d'intents. */
+  reconnect(reason: string): Promise<void> {
+    return this.#enqueue(async () => {
+      if (!this.#wantsRunning()) return;
+      this.logBus.push('discord', `${reason} : reconnexion du bot.`);
+      await this.#disconnect();
+      await this.#connect();
+    });
+  }
+
   /** À l'arrêt du serveur : déconnecte sans toucher à `autoStart`. */
   shutdown(): Promise<void> {
     return this.#enqueue(() => this.#disconnect());
@@ -158,7 +181,8 @@ export class BotManager {
     const token = this.secrets.get('discordToken');
     if (!token) return this.#fail('Aucun token Discord. Saisissez-le dans Paramètres.');
 
-    const client = this.createClient();
+    const { membersIntent } = this.getConfig();
+    const client = this.createClient({ membersIntent });
     this.#client = client;
     this.#listen(client);
     this.#setState('connecting');
@@ -169,7 +193,7 @@ export class BotManager {
       // `login` a déjà détruit le client.
       client.removeAllListeners();
       this.#client = null;
-      this.#fail(describeLoginError(error));
+      this.#fail(describeLoginError(error, membersIntent));
     }
   }
 
@@ -210,7 +234,7 @@ export class BotManager {
       void this.#enqueue(async () => {
         if (this.#client !== client) return;
         await this.#disconnect();
-        this.#fail(describeCloseCode(code));
+        this.#fail(describeCloseCode(code, this.getConfig().membersIntent));
       });
     });
     client.on(Events.GuildCreate, (guild) => {
@@ -234,6 +258,10 @@ export class BotManager {
         onReplied = (text) => this.#relay(formatBotReply(incoming.author, text));
       }
       void this.pipeline.handle(incoming, discordTransport(message, botId, onReplied));
+      if (!incoming.isDM) {
+        const botAnswers = extractTrigger(incoming, this.getConfig()) !== null;
+        void this.events.handle(incoming, discordEventActions(message), botAnswers);
+      }
     });
     client.on(Events.Error, (error) => {
       this.logBus.push('error', `Erreur Discord : ${error.message}`);
@@ -309,19 +337,19 @@ export function inviteUrl(applicationId: string): string {
   return `https://discord.com/oauth2/authorize?${params}`;
 }
 
-function describeLoginError(error: unknown): string {
+function describeLoginError(error: unknown, membersIntent: boolean): string {
   const message = errorMessage(error);
   const code = error instanceof Error && 'code' in error ? error.code : undefined;
   if (code === DiscordjsErrorCodes.TokenInvalid || message === 'Authentication failed') {
     return TOKEN_INVALID;
   }
-  if (message === 'Used disallowed intents') return INTENT_MISSING;
+  if (message === 'Used disallowed intents') return intentMissing(membersIntent);
   return `Connexion à Discord impossible : ${message}`;
 }
 
-function describeCloseCode(code: number): string {
+function describeCloseCode(code: number, membersIntent: boolean): string {
   if (code === GatewayCloseCodes.AuthenticationFailed) return TOKEN_INVALID;
-  if (code === GatewayCloseCodes.DisallowedIntents) return INTENT_MISSING;
+  if (code === GatewayCloseCodes.DisallowedIntents) return intentMissing(membersIntent);
   return `Discord a fermé la connexion (code ${code}).`;
 }
 

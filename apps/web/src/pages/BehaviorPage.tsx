@@ -1,5 +1,4 @@
 import {
-  aiModelSchema,
   bypassUserSchema,
   PERSONA_PRESETS,
   SYSTEM_PROMPT_MAX_LENGTH,
@@ -12,14 +11,15 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Choice } from '@/components/Choice';
-import { ChannelSelect, DiscoveryPicker, RemovableBadge } from '@/components/DiscoveryPicker';
+import { ModelSelect } from '@/components/ModelSelect';
+import { DiscoverySelect, DiscoveryPicker, RemovableBadge } from '@/components/DiscoveryPicker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { apiGet, apiSend, configQuery } from '@/lib/api';
+import { apiSend, configQuery } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const RETENTION_CHOICES = [
@@ -245,7 +245,9 @@ function BehaviorForm({ saved }: { saved: BotConfig }) {
         {draft.dmRelayEnabled && (
           <div className="grid gap-2">
             <Label htmlFor="dmRelayChannel">Salon de destination</Label>
-            <ChannelSelect
+            <DiscoverySelect
+              kind="channel"
+              emptyLabel="Choisir un salon"
               id="dmRelayChannel"
               value={draft.dmRelayChannelId}
               onChange={(dmRelayChannelId) => set({ dmRelayChannelId })}
@@ -259,7 +261,12 @@ function BehaviorForm({ saved }: { saved: BotConfig }) {
       </Section>
 
       <Section title="Intelligence artificielle">
-        <ModelSelect value={draft.model} onChange={(model) => set({ model })} />
+        <ModelSelect
+          id="model"
+          label="Modèle"
+          value={draft.model}
+          onChange={(model) => set({ model })}
+        />
         <PersonaEditor
           value={draft.systemPrompt}
           onChange={(systemPrompt) => set({ systemPrompt })}
@@ -345,45 +352,6 @@ function UserList(props: { value: string[]; onChange: (users: string[]) => void 
         </Button>
       </form>
       {error && <p className="text-destructive text-sm">{error}</p>}
-    </div>
-  );
-}
-
-function ModelSelect(props: { value: string; onChange: (model: string) => void }) {
-  const models = useQuery({
-    queryKey: ['ai', 'models'],
-    queryFn: () => apiGet('/api/ai/models', aiModelSchema.array()),
-    staleTime: 5 * 60_000,
-  });
-  const options = models.data ?? [];
-  const listed = options.some((model) => model.id === props.value);
-
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor="model">Modèle</Label>
-      <select
-        id="model"
-        className="border-input dark:bg-input/30 [&>option]:bg-popover h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-        value={props.value}
-        onChange={(event) => props.onChange(event.target.value)}
-      >
-        {!listed && <option value={props.value}>{props.value}</option>}
-        {options.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.label} ({model.id})
-          </option>
-        ))}
-      </select>
-      {models.isError ? (
-        <p className="text-destructive text-xs">
-          {models.error.message}{' '}
-          <Link to="/parametres" className="underline">
-            Ouvrir Paramètres
-          </Link>
-        </p>
-      ) : (
-        <Hint>Les modèles « Flash-Lite » sont les plus rapides et les moins chers.</Hint>
-      )}
     </div>
   );
 }

@@ -8,22 +8,16 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { ZodError } from 'zod';
-import type { BotManager } from '../adapters/discord/botManager';
-import type { AiService } from '../core/ai/aiService';
-import type { LogBus } from '../core/logs/logBus';
-import type { SessionStore } from '../core/memory/sessionStore';
+import type { Container } from '../container';
 import type { DatabaseHandle } from '../db/client';
 import type { Env } from '../env';
 import { AppError } from '../lib/appError';
-import type { AuthService } from '../services/authService';
-import type { CommandService } from '../services/commandService';
-import type { ConfigService } from '../services/configService';
-import type { SecretsService } from '../services/secretsService';
 import { registerRealtimeRoutes } from './realtime';
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from './routes/auth';
 import { registerBotRoutes } from './routes/bot';
 import { registerCommandRoutes } from './routes/commands';
 import { registerConfigRoutes } from './routes/config';
+import { registerEventRoutes } from './routes/events';
 import { registerHealthRoute } from './routes/health';
 import { registerLogsRoutes } from './routes/logs';
 import { registerMemoryRoutes } from './routes/memory';
@@ -31,22 +25,15 @@ import { registerSecretsRoutes } from './routes/secrets';
 import { SESSION_COOKIE } from './session';
 import { registerStatic } from './static';
 
-export interface AppDeps {
+export type AppDeps = Container & {
   env: Env;
   database: DatabaseHandle;
-  logBus: LogBus;
-  auth: AuthService;
-  secrets: SecretsService;
-  config: ConfigService;
-  ai: AiService;
-  memory: SessionStore;
-  commands: CommandService;
-  bot: BotManager;
-}
+};
 
 /** Ne lance pas l'écoute : les tests passent par `app.inject()`. */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const { env, database, logBus, auth, secrets, config, ai, memory, commands, bot } = deps;
+  const { eventRules, events } = deps;
   const app = Fastify({
     logger: loggerOptions(env),
     bodyLimit: 1024 * 1024,
@@ -118,6 +105,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerConfigRoutes(protectedApp, config, ai, memory);
     registerMemoryRoutes(protectedApp, memory, config, logBus);
     registerCommandRoutes(protectedApp, commands);
+    registerEventRoutes(protectedApp, eventRules, events);
     registerRealtimeRoutes(protectedApp, logBus, bot, memory, auth);
   });
 

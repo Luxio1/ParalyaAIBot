@@ -19,6 +19,8 @@ export interface AiRequest {
   history: AiTurn[];
   prompt: string;
   images: AiImage[];
+  /** Schéma JSON imposé à la réponse, qui est alors un JSON valide (non vérifié : à valider). */
+  jsonSchema?: object;
 }
 
 /** Un fournisseur d'IA (Gemini aujourd'hui). Ses erreurs sont des `AiError`. */
