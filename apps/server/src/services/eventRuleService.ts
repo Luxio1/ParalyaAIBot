@@ -10,48 +10,62 @@ import type { LogBus } from '../core/logs/logBus';
 import type { Db } from '../db/client';
 import { BOT_SETTINGS_ID, botSettings, eventRules } from '../db/schema';
 import { AppError } from '../lib/appError';
+import type { ProfileService } from './profileService';
 
-/** Règles du moteur d'événements, gardées en mémoire : une modification s'applique au message suivant. */
+/**
+ * Règles du moteur d'événements, gardées en mémoire : une modification s'applique au message
+ * suivant. `enabled` désigne l'état dans le profil actif.
+ */
 export class EventRuleService {
   #rules: EventRule[] = [];
 
   constructor(
     private readonly db: Db,
     private readonly logBus: LogBus,
+    private readonly profiles: ProfileService,
   ) {
     this.#seedExamplesOnce();
     this.#reload();
   }
 
   list(): EventRule[] {
-    return this.#rules;
+    return this.#rules.map((rule) => ({ ...rule, enabled: this.profiles.isRuleEnabled(rule.id) }));
   }
 
   enabled(): EventRule[] {
-    return this.#rules.filter((rule) => rule.enabled);
+    return this.list().filter((rule) => rule.enabled);
   }
 
   create(input: EventRuleInput): void {
     if (this.#rules.length >= MAX_EVENT_RULES) {
       throw new AppError(400, 'too_many_rules', `${MAX_EVENT_RULES} règles au maximum.`);
     }
-    this.db.insert(eventRules).values({ definition: input }).run();
+    const { enabled, ...definition } = input;
+    const { id } = this.db
+      .insert(eventRules)
+      .values({ definition })
+      .returning({ id: eventRules.id })
+      .get();
+    this.profiles.setRuleEnabled(id, enabled);
     this.#changed(`Règle « ${input.name} » créée.`);
   }
 
   update(id: number, input: EventRuleInput): void {
     this.#get(id);
+    const { enabled, ...definition } = input;
     this.db
       .update(eventRules)
-      .set({ definition: input, updatedAt: new Date() })
+      .set({ definition, updatedAt: new Date() })
       .where(eq(eventRules.id, id))
       .run();
+    this.profiles.setRuleEnabled(id, enabled);
     this.#changed(`Règle « ${input.name} » modifiée.`);
   }
 
   remove(id: number): void {
     const rule = this.#get(id);
     this.db.delete(eventRules).where(eq(eventRules.id, id)).run();
+    this.profiles.forgetRule(id);
     this.#changed(`Règle « ${rule.name} » supprimée.`);
   }
 
@@ -68,10 +82,11 @@ export class EventRuleService {
       for (const rule of this.#rules.filter((candidate) => names.has(candidate.name))) {
         tx.delete(eventRules).where(eq(eventRules.id, rule.id)).run();
       }
-      tx.insert(eventRules)
-        .values(EXAMPLE_EVENT_RULES.map((definition) => ({ definition })))
-        .run();
+      tx.insert(eventRules).values(exampleRows()).run();
     });
+    for (const rule of this.#rules.filter((candidate) => names.has(candidate.name))) {
+      this.profiles.forgetRule(rule.id);
+    }
     this.#changed("Règles d'exemple restaurées (désactivées).");
   }
 
@@ -83,9 +98,7 @@ export class EventRuleService {
       .get();
     if (settings?.eventsSeeded) return;
     this.db.transaction((tx) => {
-      tx.insert(eventRules)
-        .values(EXAMPLE_EVENT_RULES.map((definition) => ({ definition })))
-        .run();
+      tx.insert(eventRules).values(exampleRows()).run();
       tx.insert(botSettings)
         .values({ id: BOT_SETTINGS_ID, eventsSeeded: true })
         .onConflictDoUpdate({ target: botSettings.id, set: { eventsSeeded: true } })
@@ -96,7 +109,9 @@ export class EventRuleService {
   #reload(): void {
     const rows = this.db.select().from(eventRules).orderBy(eventRules.id).all();
     this.#rules = rows.flatMap((row) => {
-      const parsed = eventRuleSchema.safeParse({ ...(row.definition as object), id: row.id });
+      // `enabled` est fourni par le profil actif dans `list()`.
+      const definition = { ...(row.definition as object), enabled: false, id: row.id };
+      const parsed = eventRuleSchema.safeParse(definition);
       if (parsed.success) return [parsed.data];
       this.logBus.push('error', `Règle d'événement n° ${row.id} illisible : ignorée.`);
       return [];
@@ -113,4 +128,9 @@ export class EventRuleService {
     if (!rule) throw new AppError(404, 'not_found', 'Règle introuvable.');
     return rule;
   }
+}
+
+/** Exemples installés désactivés : ils n'entrent dans aucun profil. */
+function exampleRows() {
+  return EXAMPLE_EVENT_RULES.map(({ enabled: _enabled, ...definition }) => ({ definition }));
 }

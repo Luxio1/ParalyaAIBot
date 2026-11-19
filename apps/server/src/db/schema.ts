@@ -49,6 +49,22 @@ export const botSettings = sqliteTable('bot_settings', {
   /** Exemples installés une seule fois : supprimés, ils ne reviennent pas au redémarrage. */
   commandsSeeded: integer('commands_seeded', { mode: 'boolean' }).notNull().default(false),
   eventsSeeded: integer('events_seeded', { mode: 'boolean' }).notNull().default(false),
+  /** Profil de comportement en cours ; à défaut, le premier profil. */
+  activeProfileId: integer('active_profile_id'),
+  updatedAt: timestamp('updated_at'),
+});
+
+/**
+ * Profils de comportement : réglages `PROFILE_FIELDS` (JSON, complétés à la lecture), et
+ * commandes et règles d'événements actives dans ce profil.
+ */
+export const profiles = sqliteTable('profiles', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  behavior: text('behavior', { mode: 'json' }).notNull().default({}),
+  commandIds: text('command_ids', { mode: 'json' }).$type<number[]>().notNull().default([]),
+  eventRuleIds: text('event_rule_ids', { mode: 'json' }).$type<number[]>().notNull().default([]),
+  createdAt: timestamp('created_at'),
   updatedAt: timestamp('updated_at'),
 });
 
@@ -57,7 +73,6 @@ export const commands = sqliteTable('commands', {
   /** En minuscules, sans le préfixe. */
   name: text('name').notNull().unique(),
   description: text('description').notNull().default(''),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   type: text('type', { enum: COMMAND_TYPES }).notNull(),
   response: text('response').notNull().default(''),
   promptTemplate: text('prompt_template').notNull().default(''),
@@ -66,7 +81,10 @@ export const commands = sqliteTable('commands', {
   updatedAt: timestamp('updated_at'),
 });
 
-/** Règles du moteur d'événements ; `definition` est un `EventRuleInput` en JSON, validé à la lecture. */
+/**
+ * Règles du moteur d'événements ; `definition` est un `EventRuleInput` sans `enabled` (qui dépend
+ * du profil actif), en JSON validé à la lecture.
+ */
 export const eventRules = sqliteTable('event_rules', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   definition: text('definition', { mode: 'json' }).notNull(),

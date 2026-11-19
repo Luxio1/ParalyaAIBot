@@ -6,15 +6,17 @@ import { AuthScreen } from '@/components/AuthScreen';
 import { Button } from '@/components/ui/button';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { authStateQuery } from '@/lib/api';
-import { BehaviorPage } from '@/pages/BehaviorPage';
 import { BotPage } from '@/pages/BotPage';
 import { CommandsPage } from '@/pages/CommandsPage';
+import { DirectMessagesPage } from '@/pages/DirectMessagesPage';
 import { EventsPage } from '@/pages/EventsPage';
 import { ConsolePage } from '@/pages/ConsolePage';
 import { GuidePage } from '@/pages/GuidePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { MemoryPage } from '@/pages/MemoryPage';
+import { PersonalityPage } from '@/pages/PersonalityPage';
 import { PlaygroundPage } from '@/pages/PlaygroundPage';
+import { RepliesPage } from '@/pages/RepliesPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { SetupPage } from '@/pages/SetupPage';
 
@@ -24,7 +26,9 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/bot" replace /> },
       { path: 'bot', element: <BotPage /> },
-      { path: 'comportement', element: <BehaviorPage /> },
+      { path: 'personnalite', element: <PersonalityPage /> },
+      { path: 'reponses', element: <RepliesPage /> },
+      { path: 'messages-prives', element: <DirectMessagesPage /> },
       { path: 'commandes', element: <CommandsPage /> },
       { path: 'evenements', element: <EventsPage /> },
       { path: 'memoire', element: <MemoryPage /> },

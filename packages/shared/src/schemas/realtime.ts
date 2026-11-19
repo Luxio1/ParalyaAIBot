@@ -12,5 +12,7 @@ export const serverEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('bot:discovery-changed') }),
   /** Conversations en mémoire modifiées : le client relit `GET /api/memory/sessions`. */
   z.object({ type: z.literal('memory:changed') }),
+  /** Réglages ou profil actif modifiés : le client relit réglages, profils, commandes et règles. */
+  z.object({ type: z.literal('config:changed') }),
 ]);
 export type ServerEvent = z.infer<typeof serverEventSchema>;

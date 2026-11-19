@@ -1,7 +1,15 @@
 import { LOG_BUFFER_SIZE, serverEventSchema, type BotStatus, type LogEntry } from '@bot/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { authStateQuery, BOT_DISCOVERY_QUERY_KEY, memorySessionsQuery } from '@/lib/api';
+import {
+  authStateQuery,
+  BOT_DISCOVERY_QUERY_KEY,
+  commandsQuery,
+  configQuery,
+  eventRulesQuery,
+  memorySessionsQuery,
+  profilesQuery,
+} from '@/lib/api';
 
 const MAX_RETRY_DELAY_MS = 10_000;
 
@@ -58,6 +66,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             return void queryClient.invalidateQueries({
               queryKey: memorySessionsQuery.queryKey,
             });
+          case 'config:changed':
+            for (const query of [configQuery, profilesQuery, commandsQuery, eventRulesQuery]) {
+              void queryClient.invalidateQueries({ queryKey: query.queryKey });
+            }
+            return;
         }
       };
       socket.onclose = () => {

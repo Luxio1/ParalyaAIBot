@@ -5,6 +5,7 @@ import type { BotManager } from '../adapters/discord/botManager';
 import type { LogBus } from '../core/logs/logBus';
 import type { SessionStore } from '../core/memory/sessionStore';
 import type { AuthService } from '../services/authService';
+import type { ProfileService } from '../services/profileService';
 import { SESSION_COOKIE } from './session';
 
 const SESSION_RECHECK_MS = 60_000;
@@ -16,6 +17,7 @@ export function registerRealtimeRoutes(
   logBus: LogBus,
   bot: BotManager,
   memory: SessionStore,
+  profiles: ProfileService,
   auth: AuthService,
 ): void {
   app.get('/ws', { websocket: true }, (socket, request) => {
@@ -26,6 +28,7 @@ export function registerRealtimeRoutes(
       logBus.subscribe((event) => send(socket, event)),
       bot.subscribe((event) => send(socket, event)),
       memory.subscribe(() => send(socket, { type: 'memory:changed' })),
+      profiles.onChange(() => send(socket, { type: 'config:changed' })),
     ];
 
     // Une session fermée ailleurs (déconnexion, mot de passe changé) coupe aussi le flux ouvert.

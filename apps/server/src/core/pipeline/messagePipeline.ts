@@ -2,6 +2,7 @@ import type { BotConfig, Command } from '@bot/shared';
 import { AiError, type AiImage } from '../ai/aiProvider';
 import type { AiService } from '../ai/aiService';
 import { DATA_BLOCK_RULE, dataBlock } from '../ai/promptData';
+import { repairDiscordMarkdown } from '../../lib/discordMarkdown';
 import { gatherContext, type MessageContext } from '../enrich/context';
 import type { LogBus } from '../logs/logBus';
 import type { SessionInfo, SessionStore } from '../memory/sessionStore';
@@ -63,8 +64,11 @@ export interface Transport {
   startTyping(): () => void;
   /** Charge le message cité, seulement quand le bot a décidé de répondre. */
   fetchQuoted(): Promise<QuotedMessage | null>;
-  /** Vrai si l'auteur possède un serveur ou porte l'un de ces rôles (en MP : sur un serveur commun). */
-  isExempt(roleIds: string[]): Promise<boolean>;
+  /**
+   * Vrai si l'auteur porte l'un de ces rôles, ou possède le serveur quand `includeOwners` est
+   * vrai (en MP : sur un serveur commun).
+   */
+  isExempt(roleIds: string[], includeOwners: boolean): Promise<boolean>;
 }
 
 /** Réponse aux utilisateurs quand l'IA échoue : la cause exacte va dans la console. */
@@ -170,13 +174,14 @@ export class MessagePipeline {
       for (const failure of context.failures)
         this.deps.logBus.push('system', `Contenu ignoré : ${failure}`);
       const history = config.memoryEnabled ? this.deps.memory.history(session.id, retentionMs) : [];
-      answer = await this.deps.ai.generate({
+      const raw = await this.deps.ai.generate({
         model: config.model,
         systemPrompt: systemPrompt(question.persona, message, context.images),
         history,
         prompt: buildPrompt(query, context),
         images: context.images,
       });
+      answer = repairDiscordMarkdown(raw);
       this.deps.logBus.push(
         'ai',
         `${config.model} : réponse en ${((Date.now() - startedAt) / 1000).toFixed(1)} s${describeContext(history.length, context)}.`,
@@ -219,7 +224,8 @@ export class MessagePipeline {
     if (config.bypassUsers.some((entry) => entry === author.id || entry === author.username)) {
       return true;
     }
-    if (await transport.isExempt(config.bypassRoleIds).catch(() => false)) return true;
+    if (await transport.isExempt(config.bypassRoleIds, config.bypassOwners).catch(() => false))
+      return true;
 
     const windowMs = config.rateLimitWindowSeconds * 1000;
     const result = this.deps.rateLimiter.hit(author.id, config.rateLimitMaxRequests, windowMs);
@@ -333,7 +339,8 @@ function systemPrompt(persona: string, message: IncomingMessage, images: AiImage
     persona,
     '',
     `Tu es un bot Discord. Tu réponds à ${message.author.displayName} (@${message.author.username}) ${where} ; tu peux l'appeler par son pseudo.`,
-    'Rédige directement ta réponse, sans préambule ni commentaire sur ta réponse. Tu peux utiliser le Markdown de Discord.',
+    'Rédige directement ta réponse, sans préambule ni commentaire sur ta réponse.',
+    "Mise en forme : uniquement le Markdown de Discord (gras, italique, listes, citations, blocs de code). Ouvre et ferme chaque gras ou italique sur la même ligne. Pas de tableaux, que Discord n'affiche pas.",
     DATA_BLOCK_RULE,
   ];
   if (images.length > 0)

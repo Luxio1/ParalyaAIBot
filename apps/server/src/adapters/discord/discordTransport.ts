@@ -63,14 +63,15 @@ export function discordTransport(
       }
       onReplied?.(text);
     },
-    async isExempt(roleIds) {
+    async isExempt(roleIds, includeOwners) {
       const { guild, member, author } = message;
       if (guild) {
-        return guild.ownerId === author.id || roleIds.some((id) => member?.roles.cache.has(id));
+        const owner = includeOwners && guild.ownerId === author.id;
+        return owner || roleIds.some((id) => member?.roles.cache.has(id));
       }
       // En MP : propriétaire d'un serveur commun, ou rôle exempté sur le serveur qui le définit.
       const guilds = [...message.client.guilds.cache.values()];
-      if (guilds.some((candidate) => candidate.ownerId === author.id)) return true;
+      if (includeOwners && guilds.some((candidate) => candidate.ownerId === author.id)) return true;
       for (const candidate of guilds) {
         const wanted = roleIds.filter((id) => candidate.roles.cache.has(id));
         if (wanted.length === 0) continue;

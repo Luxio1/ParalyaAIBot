@@ -6,6 +6,7 @@ import { FakeAiProvider } from '../ai/fakeAiProvider';
 import { openDatabase } from '../../db/client';
 import { runMigrations } from '../../db/migrate';
 import { CommandService } from '../../services/commandService';
+import { ProfileService } from '../../services/profileService';
 import { LogBus } from '../logs/logBus';
 import { SessionStore } from '../memory/sessionStore';
 import { RateLimiter } from '../ratelimit/rateLimiter';
@@ -60,6 +61,8 @@ describe('MessagePipeline', () => {
   let transport: Transport;
   /** Simule une personne qui porte le rôle `EXEMPT_ROLE`. */
   let exemptRoleHolder: boolean;
+  /** Simule le propriétaire du serveur. */
+  let serverOwner: boolean;
 
   beforeEach(() => {
     config = DEFAULT_BOT_CONFIG;
@@ -68,7 +71,7 @@ describe('MessagePipeline', () => {
     memory = new SessionStore();
     const database = openDatabase(':memory:');
     runMigrations(database.db);
-    commands = new CommandService(database.db, logBus);
+    commands = new CommandService(database.db, logBus, new ProfileService(database.db, logBus));
     pipeline = new MessagePipeline({
       getConfig: () => config,
       ai: new AiService(aiProvider),
@@ -79,12 +82,14 @@ describe('MessagePipeline', () => {
     });
     quoted = null;
     exemptRoleHolder = false;
+    serverOwner = false;
     replies = [];
     transport = {
       reply: async (text) => void replies.push(text),
       startTyping: () => () => undefined,
       fetchQuoted: async () => quoted,
-      isExempt: async (roleIds) => exemptRoleHolder && roleIds.includes(EXEMPT_ROLE),
+      isExempt: async (roleIds, includeOwners) =>
+        (exemptRoleHolder && roleIds.includes(EXEMPT_ROLE)) || (serverOwner && includeOwners),
     };
   });
 
@@ -330,6 +335,18 @@ describe('MessagePipeline', () => {
       for (let i = 0; i < 3; i++) await ask(dave);
 
       expect(aiProvider.requests).toHaveLength(9);
+    });
+
+    it("n'exempte le propriétaire du serveur que si l'option est activée", async () => {
+      configure({ ...RATE_LIMITED, rateLimitMaxRequests: 1, rateLimitNotify: false });
+      serverOwner = true;
+      await ask();
+      await ask();
+      expect(aiProvider.requests).toHaveLength(1);
+
+      configure({ ...RATE_LIMITED, rateLimitMaxRequests: 1, bypassOwners: true });
+      await ask();
+      expect(aiProvider.requests).toHaveLength(2);
     });
   });
 });

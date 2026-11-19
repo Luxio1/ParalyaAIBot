@@ -4,6 +4,7 @@ import { Bot, ExternalLink, Hash, Megaphone, MessagesSquare, Play, Square } from
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { BotStateDot } from '@/components/BotStateDot';
+import { ProfileSelect } from '@/components/ProfileSwitcher';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,10 @@ export function BotPage() {
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
-      <h1 className="text-xl font-semibold">Bot</h1>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Bot</h1>
+        <ProfileSelect />
+      </header>
       {bot && <StatusCard status={bot} />}
       <GuildsCard online={bot?.state === 'online'} />
     </div>

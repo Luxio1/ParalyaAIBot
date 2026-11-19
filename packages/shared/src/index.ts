@@ -15,5 +15,6 @@ export * from './schemas/health';
 export * from './schemas/logs';
 export * from './schemas/memory';
 export * from './schemas/playground';
+export * from './schemas/profiles';
 export * from './schemas/realtime';
 export * from './schemas/secrets';

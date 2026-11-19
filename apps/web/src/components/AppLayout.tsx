@@ -6,9 +6,11 @@ import {
   Brain,
   FlaskConical,
   LogOut,
+  Mail,
   Radar,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   SquareSlash,
   SquareTerminal,
 } from 'lucide-react';
@@ -19,16 +21,34 @@ import { useRealtime } from '@/hooks/useRealtime';
 import { apiSend, authStateQuery } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-const NAV_ITEMS = [
-  { to: '/bot', label: 'Bot', icon: Bot },
-  { to: '/comportement', label: 'Comportement', icon: SlidersHorizontal },
-  { to: '/commandes', label: 'Commandes', icon: SquareSlash },
-  { to: '/evenements', label: 'Événements', icon: Radar },
-  { to: '/memoire', label: 'Mémoire', icon: Brain },
-  { to: '/simulateur', label: 'Simulateur', icon: FlaskConical },
-  { to: '/console', label: 'Console', icon: SquareTerminal },
-  { to: '/parametres', label: 'Paramètres', icon: Settings },
-  { to: '/guide', label: 'Guide', icon: BookOpen },
+/** Une fonction du bot se règle sur une seule page. */
+const NAV_GROUPS = [
+  {
+    label: 'Bot',
+    items: [
+      { to: '/bot', label: 'Tableau de bord', icon: Bot },
+      { to: '/console', label: 'Console', icon: SquareTerminal },
+    ],
+  },
+  {
+    label: 'Configuration',
+    items: [
+      { to: '/personnalite', label: 'Personnalité', icon: Sparkles },
+      { to: '/reponses', label: 'Réponses', icon: SlidersHorizontal },
+      { to: '/messages-prives', label: 'Messages privés', icon: Mail },
+      { to: '/memoire', label: 'Mémoire', icon: Brain },
+      { to: '/commandes', label: 'Commandes', icon: SquareSlash },
+      { to: '/evenements', label: 'Événements', icon: Radar },
+    ],
+  },
+  {
+    label: 'Outils',
+    items: [
+      { to: '/simulateur', label: 'Simulateur', icon: FlaskConical },
+      { to: '/guide', label: 'Guide', icon: BookOpen },
+      { to: '/parametres', label: 'Paramètres', icon: Settings },
+    ],
+  },
 ];
 
 export function AppLayout() {
@@ -50,22 +70,31 @@ export function AppLayout() {
           <span className="font-semibold">{APP_NAME}</span>
         </div>
 
-        <nav className="flex gap-1 md:flex-col">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                cn(
-                  'text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-2 rounded-md px-3 py-2 text-sm',
-                  isActive && 'bg-accent text-foreground',
-                )
-              }
-            >
-              <Icon className="size-4" aria-hidden />
-              {label}
-              {to === '/bot' && botState && <BotStateDot state={botState} className="ml-auto" />}
-            </NavLink>
+        <nav className="flex gap-4 overflow-x-auto md:flex-col md:overflow-visible">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="flex shrink-0 gap-1 md:flex-col">
+              <span className="text-muted-foreground hidden px-3 text-xs font-medium tracking-wide uppercase md:block">
+                {group.label}
+              </span>
+              {group.items.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    cn(
+                      'text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap',
+                      isActive && 'bg-accent text-foreground',
+                    )
+                  }
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {label}
+                  {to === '/bot' && botState && (
+                    <BotStateDot state={botState} className="ml-auto" />
+                  )}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 

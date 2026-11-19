@@ -2,10 +2,13 @@ import type { MemorySession } from '@bot/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { FlaskConical, MessageSquare, Trash2, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
 import { toast } from 'sonner';
+import { SaveBar, Section, useConfigForm, type ConfigForm } from '@/components/ConfigForm';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { apiSend, memorySessionsQuery } from '@/lib/api';
 
 export function MemoryPage() {
@@ -20,34 +23,35 @@ export function MemoryPage() {
     mutationFn: (id: string) => apiSend('DELETE', `/api/memory/sessions/${encodeURIComponent(id)}`),
     onError,
   });
+  const form = useConfigForm();
   // Une conversation expirée disparaît à l'écran sans attendre le nettoyage du serveur.
   const active = (sessions.data ?? []).filter((session) => Date.parse(session.expiresAt) > now);
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">Mémoire</h1>
-        <Button
-          className="ml-auto"
-          variant="outline"
-          size="sm"
-          disabled={clearAll.isPending || active.length === 0}
-          onClick={() => clearAll.mutate()}
-        >
-          <Trash2 />
-          Tout effacer
-        </Button>
-      </header>
-      <p className="text-muted-foreground text-sm">
-        Conversations dont le bot se souvient. Leur contenu n'est jamais affiché ni écrit sur le
-        disque. Durée et taille se règlent dans{' '}
-        <Link to="/comportement" className="underline">
-          Comportement
-        </Link>
-        .
-      </p>
+      <h1 className="text-xl font-semibold">Mémoire</h1>
+
+      {form && <MemorySettings form={form} />}
 
       <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="mr-auto">Conversations en cours</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={clearAll.isPending || active.length === 0}
+              onClick={() => clearAll.mutate()}
+            >
+              <Trash2 />
+              Tout effacer
+            </Button>
+          </div>
+          <CardDescription>
+            Leur contenu n'est jamais affiché ni écrit sur le disque. La mémoire est vidée au
+            redémarrage du serveur et au changement de profil.
+          </CardDescription>
+        </CardHeader>
         <CardContent className="grid gap-2">
           {sessions.isError && <p className="text-destructive text-sm">{sessions.error.message}</p>}
           {active.length === 0 ? (
@@ -65,7 +69,69 @@ export function MemoryPage() {
           )}
         </CardContent>
       </Card>
+
+      {form && <SaveBar form={form} />}
     </div>
+  );
+}
+
+const RETENTION_CHOICES = [
+  [5, '5 minutes'],
+  [15, '15 minutes'],
+  [30, '30 minutes'],
+  [60, '1 heure'],
+  [180, '3 heures'],
+  [720, '12 heures'],
+  [1440, '24 heures'],
+] as const;
+
+function MemorySettings({ form }: { form: ConfigForm }) {
+  const { draft, set } = form;
+  return (
+    <Section
+      title="Réglages"
+      description="Le bot se souvient des derniers échanges : une conversation par personne en MP, et par personne et salon sur un serveur."
+      scope="profile"
+    >
+      <div className="flex items-center gap-3">
+        <Switch
+          id="memoryEnabled"
+          checked={draft.memoryEnabled}
+          onCheckedChange={(memoryEnabled) => set({ memoryEnabled })}
+        />
+        <Label htmlFor="memoryEnabled">Mémoire de conversation</Label>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="memoryRetention">Oublier après une inactivité de</Label>
+          <select
+            id="memoryRetention"
+            className="border-input dark:bg-input/30 [&>option]:bg-popover h-9 rounded-md border bg-transparent px-3 text-sm"
+            disabled={!draft.memoryEnabled}
+            value={draft.memoryRetentionMinutes}
+            onChange={(event) => set({ memoryRetentionMinutes: Number(event.target.value) })}
+          >
+            {RETENTION_CHOICES.map(([minutes, label]) => (
+              <option key={minutes} value={minutes}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="memoryMaxMessages">Messages conservés (4 à 20)</Label>
+          <Input
+            id="memoryMaxMessages"
+            type="number"
+            min={4}
+            max={20}
+            disabled={!draft.memoryEnabled}
+            value={draft.memoryMaxMessages}
+            onChange={(event) => set({ memoryMaxMessages: Number(event.target.value) })}
+          />
+        </div>
+      </div>
+    </Section>
   );
 }
 

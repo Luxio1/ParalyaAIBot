@@ -5,28 +5,39 @@ import type { CommandCatalog } from '../core/pipeline/commands';
 import type { Db } from '../db/client';
 import { BOT_SETTINGS_ID, botSettings, commands } from '../db/schema';
 import { AppError } from '../lib/appError';
+import type { ProfileService } from './profileService';
 
 const NAME_MAX_LENGTH = 32;
 
-/** Commandes personnalisées, gardées en mémoire : une modification s'applique au message suivant. */
+/** Commande enregistrée ; son état actif dépend du profil. */
+type StoredCommand = Omit<Command, 'enabled'>;
+
+/**
+ * Commandes personnalisées, gardées en mémoire : une modification s'applique au message suivant.
+ * `enabled` désigne l'état dans le profil actif.
+ */
 export class CommandService implements CommandCatalog {
-  #byName = new Map<string, Command>();
+  #byName = new Map<string, StoredCommand>();
 
   constructor(
     private readonly db: Db,
     private readonly logBus: LogBus,
+    private readonly profiles: ProfileService,
   ) {
-    this.#seedExamplesOnce();
     this.#reload();
+    this.#seedExamplesOnce();
   }
 
   list(): Command[] {
-    return [...this.#byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    return [...this.#byName.values()]
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+      .map((command) => ({ ...command, enabled: this.profiles.isCommandEnabled(command.id) }));
   }
 
   find(name: string): Command | undefined {
     const command = this.#byName.get(name.toLowerCase());
-    return command?.enabled ? command : undefined;
+    if (!command || !this.profiles.isCommandEnabled(command.id)) return undefined;
+    return { ...command, enabled: true };
   }
 
   enabled(): Command[] {
@@ -38,24 +49,29 @@ export class CommandService implements CommandCatalog {
       throw new AppError(400, 'too_many_commands', `${MAX_COMMANDS} commandes au maximum.`);
     }
     this.#assertNameFree(input.name);
-    this.db.insert(commands).values(input).run();
+    const { enabled, ...values } = input;
+    const { id } = this.db.insert(commands).values(values).returning({ id: commands.id }).get();
+    this.profiles.setCommandEnabled(id, enabled);
     this.#changed(`Commande « ${input.name} » créée.`);
   }
 
   update(id: number, input: CommandInput): void {
     const current = this.#get(id);
     this.#assertNameFree(input.name, id);
+    const { enabled, ...values } = input;
     this.db
       .update(commands)
-      .set({ ...input, updatedAt: new Date() })
+      .set({ ...values, updatedAt: new Date() })
       .where(eq(commands.id, id))
       .run();
+    this.profiles.setCommandEnabled(id, enabled);
     this.#changed(`Commande « ${current.name} » modifiée.`);
   }
 
   remove(id: number): void {
     const current = this.#get(id);
     this.db.delete(commands).where(eq(commands.id, id)).run();
+    this.profiles.forgetCommand(id);
     this.#changed(`Commande « ${current.name} » supprimée.`);
   }
 
@@ -65,19 +81,12 @@ export class CommandService implements CommandCatalog {
     this.create({ ...source, name: this.#copyName(source.name), enabled: false });
   }
 
-  /** Recrée les exemples supprimés et remet à zéro ceux qui ont été modifiés. */
+  /**
+   * Recrée les exemples supprimés et remet à zéro ceux qui ont été modifiés ; ils sont actifs dans
+   * le profil actif.
+   */
   restoreExamples(): void {
-    this.db.transaction((tx) => {
-      for (const example of EXAMPLE_COMMANDS) {
-        tx.insert(commands)
-          .values(example)
-          .onConflictDoUpdate({
-            target: commands.name,
-            set: { ...example, updatedAt: new Date() },
-          })
-          .run();
-      }
-    });
+    this.#insertExamples(true);
     this.#changed("Commandes d'exemple restaurées.");
   }
 
@@ -88,13 +97,30 @@ export class CommandService implements CommandCatalog {
       .where(eq(botSettings.id, BOT_SETTINGS_ID))
       .get();
     if (settings?.commandsSeeded) return;
-    this.db.transaction((tx) => {
-      tx.insert(commands).values(EXAMPLE_COMMANDS).onConflictDoNothing().run();
-      tx.insert(botSettings)
-        .values({ id: BOT_SETTINGS_ID, commandsSeeded: true })
-        .onConflictDoUpdate({ target: botSettings.id, set: { commandsSeeded: true } })
-        .run();
-    });
+    this.#insertExamples(false);
+    this.db
+      .insert(botSettings)
+      .values({ id: BOT_SETTINGS_ID, commandsSeeded: true })
+      .onConflictDoUpdate({ target: botSettings.id, set: { commandsSeeded: true } })
+      .run();
+    this.#reload();
+  }
+
+  /** `overwrite` : remettre à zéro un exemple modifié ; sinon, le laisser tel quel. */
+  #insertExamples(overwrite: boolean): void {
+    for (const { enabled, ...example } of EXAMPLE_COMMANDS) {
+      const insert = this.db.insert(commands).values(example);
+      const row = overwrite
+        ? insert
+            .onConflictDoUpdate({
+              target: commands.name,
+              set: { ...example, updatedAt: new Date() },
+            })
+            .returning({ id: commands.id })
+            .get()
+        : insert.onConflictDoNothing().returning({ id: commands.id }).get();
+      if (row) this.profiles.setCommandEnabled(row.id, enabled);
+    }
   }
 
   #reload(): void {
@@ -112,7 +138,7 @@ export class CommandService implements CommandCatalog {
     this.logBus.push('system', message);
   }
 
-  #get(id: number): Command {
+  #get(id: number): StoredCommand {
     const command = [...this.#byName.values()].find((candidate) => candidate.id === id);
     if (!command) throw new AppError(404, 'not_found', 'Commande introuvable.');
     return command;
