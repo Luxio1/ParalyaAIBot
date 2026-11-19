@@ -12,8 +12,6 @@ export const TRIGGER_MODE_LABELS: Record<TriggerMode, string> = {
 
 export const CHANNEL_MODES = ['all', 'whitelist'] as const;
 
-export const SYSTEM_PROMPT_MAX_LENGTH = 8000;
-
 /** Format des identifiants Discord (snowflakes). */
 export const discordIdSchema = z.string().regex(/^\d{17,20}$/, 'Identifiant Discord invalide.');
 
@@ -49,11 +47,7 @@ export const botConfigSchema = z
       .string()
       .trim()
       .regex(/^[\w.-]{1,100}$/, 'Nom de modèle invalide.'),
-    systemPrompt: z
-      .string()
-      .trim()
-      .min(1, 'Persona requis.')
-      .max(SYSTEM_PROMPT_MAX_LENGTH, `Persona : ${SYSTEM_PROMPT_MAX_LENGTH} caractères maximum.`),
+    systemPrompt: z.string().trim().min(1, 'Persona requis.'),
     memoryEnabled: z.boolean(),
     /** Durée d'inactivité au bout de laquelle une conversation est oubliée. */
     memoryRetentionMinutes: z
@@ -81,7 +75,8 @@ export const botConfigSchema = z
       .max(3600, 'Période : 1 heure maximum.'),
     /** Prévenir une fois la personne bloquée, plutôt que l'ignorer en silence. */
     rateLimitNotify: z.boolean(),
-    /** Les propriétaires de serveur sont toujours exemptés, en plus de ces rôles. */
+    /** Exempter les propriétaires de serveur ; désactivé, ils sont limités comme les autres. */
+    bypassOwners: z.boolean(),
     bypassRoleIds: z.array(discordIdSchema).max(100),
     /** ID ou nom d'utilisateur Discord (unique), jamais le pseudo d'affichage. */
     bypassUsers: z.array(bypassUserSchema).max(100),
@@ -164,6 +159,7 @@ export const DEFAULT_BOT_CONFIG: BotConfig = {
   rateLimitMaxRequests: 3,
   rateLimitWindowSeconds: 60,
   rateLimitNotify: true,
+  bypassOwners: false,
   bypassRoleIds: [],
   bypassUsers: [],
   dmRelayEnabled: false,

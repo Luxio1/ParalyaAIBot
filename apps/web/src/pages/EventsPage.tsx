@@ -2,7 +2,6 @@ import {
   EVENT_TEXT_MAX_LENGTH,
   MAX_ROLE_DM_RECIPIENTS,
   eventTestResultSchema,
-  type BotConfig,
   type EventRule,
   type EventRuleInput,
   type EventTestResult,
@@ -12,9 +11,11 @@ import { Copy, FlaskConical, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-reac
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Choice } from '@/components/Choice';
+import { Hint, SaveBar, Section, useConfigForm, type ConfigForm } from '@/components/ConfigForm';
 import { DiscoveryPicker, DiscoverySelect } from '@/components/DiscoveryPicker';
 import { ConfirmButton, Field, IconButton } from '@/components/FormControls';
 import { ModelSelect } from '@/components/ModelSelect';
+import { ActiveProfileHint } from '@/components/ProfileSwitcher';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { apiPost, apiSend, configQuery, eventRulesQuery } from '@/lib/api';
+import { apiPost, apiSend, eventRulesQuery } from '@/lib/api';
 
 const VARIABLES_HINT =
   "Variables : {user} (@nom), {pseudo}, {userId}, {channel}, {message}, {reason} (justification de l'IA).";
@@ -51,7 +52,8 @@ type Editing = { id?: number; input: EventRuleInput };
 export function EventsPage() {
   const queryClient = useQueryClient();
   const rules = useQuery(eventRulesQuery);
-  const config = useQuery(configQuery).data;
+  const form = useConfigForm();
+  const config = form?.draft;
   const [editing, setEditing] = useState<Editing | null>(null);
 
   const mutate = useMutation({
@@ -93,15 +95,16 @@ export function EventsPage() {
         quand une règle correspond. Un seul appel à l'IA par message, et seulement si une règle
         active est concernée.
       </p>
+      <ActiveProfileHint />
 
       {config && !config.eventsEnabled && rules.data?.some((rule) => rule.enabled) && (
         <p className="rounded-md border border-amber-300/40 px-3 py-2 text-sm text-amber-300">
           Le moteur est désactivé : aucune règle ne s'applique. Activez « Analyser les messages des
-          serveurs » ci-dessous, puis cliquez sur Enregistrer dans la carte Moteur.
+          serveurs » ci-dessous, puis enregistrez.
         </p>
       )}
 
-      {config && <EngineSettings key={JSON.stringify(config)} config={config} />}
+      {form && <EngineSettings form={form} />}
 
       {editing && (
         <RuleEditor
@@ -141,84 +144,59 @@ export function EventsPage() {
       </Card>
 
       <Tester />
+      {form && <SaveBar form={form} />}
     </div>
   );
 }
 
-function EngineSettings({ config }: { config: BotConfig }) {
-  const queryClient = useQueryClient();
-  const [draft, setDraft] = useState(config);
-  const set = (changes: Partial<BotConfig>) => setDraft((current) => ({ ...current, ...changes }));
-  const dirty = JSON.stringify(draft) !== JSON.stringify(config);
-  const save = useMutation({
-    mutationFn: () => apiSend('PUT', '/api/config', draft),
-    onSuccess: () => {
-      toast.success('Réglages du moteur enregistrés.');
-      queryClient.setQueryData(configQuery.queryKey, draft);
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
+function EngineSettings({ form }: { form: ConfigForm }) {
+  const { draft, set } = form;
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Moteur</CardTitle>
-        <CardDescription>Désactivé, aucun message n'est analysé.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
+    <Section title="Moteur" description="Désactivé, aucun message n'est analysé." scope="shared">
+      <div className="flex items-center gap-3">
+        <Switch
+          id="eventsEnabled"
+          checked={draft.eventsEnabled}
+          onCheckedChange={(eventsEnabled) => set({ eventsEnabled })}
+        />
+        <Label htmlFor="eventsEnabled">Analyser les messages des serveurs</Label>
+      </div>
+      <ModelSelect
+        id="eventsModel"
+        label="Modèle d'analyse"
+        value={draft.eventsModel}
+        onChange={(eventsModel) => set({ eventsModel })}
+      />
+      <Field
+        label="Analyses par minute au maximum"
+        htmlFor="eventsMaxPerMinute"
+        hint="Au-delà, les messages ne sont plus analysés jusqu'à la minute suivante : le coût reste borné."
+      >
+        <Input
+          id="eventsMaxPerMinute"
+          type="number"
+          className="w-28"
+          min={1}
+          max={600}
+          value={draft.eventsMaxPerMinute}
+          onChange={(event) => set({ eventsMaxPerMinute: Number(event.target.value) })}
+        />
+      </Field>
+      <div className="grid gap-2">
         <div className="flex items-center gap-3">
           <Switch
-            id="eventsEnabled"
-            checked={draft.eventsEnabled}
-            onCheckedChange={(eventsEnabled) => set({ eventsEnabled })}
+            id="membersIntent"
+            checked={draft.membersIntent}
+            onCheckedChange={(membersIntent) => set({ membersIntent })}
           />
-          <Label htmlFor="eventsEnabled">Analyser les messages des serveurs</Label>
+          <Label htmlFor="membersIntent">Accès à la liste des membres</Label>
         </div>
-        <ModelSelect
-          id="eventsModel"
-          label="Modèle d'analyse"
-          value={draft.eventsModel}
-          onChange={(eventsModel) => set({ eventsModel })}
-        />
-        <Field
-          label="Analyses par minute au maximum"
-          htmlFor="eventsMaxPerMinute"
-          hint="Au-delà, les messages ne sont plus analysés jusqu'à la minute suivante : le coût reste borné."
-        >
-          <Input
-            id="eventsMaxPerMinute"
-            type="number"
-            className="w-28"
-            min={1}
-            max={600}
-            value={draft.eventsMaxPerMinute}
-            onChange={(event) => set({ eventsMaxPerMinute: Number(event.target.value) })}
-          />
-        </Field>
-        <div className="grid gap-2">
-          <div className="flex items-center gap-3">
-            <Switch
-              id="membersIntent"
-              checked={draft.membersIntent}
-              onCheckedChange={(membersIntent) => set({ membersIntent })}
-            />
-            <Label htmlFor="membersIntent">Accès à la liste des membres</Label>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            Nécessaire pour écrire aux membres d'un rôle. Activez aussi « Server Members Intent »
-            dans le Developer Portal (onglet Bot) ; le bot se reconnecte à l'enregistrement.
-          </p>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" disabled={!dirty} onClick={() => setDraft(config)}>
-            Annuler
-          </Button>
-          <Button disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
-            Enregistrer
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        <Hint>
+          Nécessaire pour écrire aux membres d'un rôle. Activez aussi « Server Members Intent » dans
+          le Developer Portal (onglet Bot) ; le bot se reconnecte à l'enregistrement.
+        </Hint>
+      </div>
+    </Section>
   );
 }
 

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { SYSTEM_PROMPT_MAX_LENGTH } from './botConfig';
 
 export const COMMAND_TYPES = ['static', 'ai'] as const;
 export type CommandType = (typeof COMMAND_TYPES)[number];
@@ -37,10 +36,7 @@ const commandFields = z.object({
     .trim()
     .max(PROMPT_TEMPLATE_MAX_LENGTH, `Modèle : ${PROMPT_TEMPLATE_MAX_LENGTH} caractères maximum.`),
   /** Consigne d'une commande IA ; vide, le persona global s'applique. */
-  systemPrompt: z
-    .string()
-    .trim()
-    .max(SYSTEM_PROMPT_MAX_LENGTH, `Consigne : ${SYSTEM_PROMPT_MAX_LENGTH} caractères maximum.`),
+  systemPrompt: z.string().trim(),
 });
 
 export const commandInputSchema = commandFields.superRefine((command, ctx) => {

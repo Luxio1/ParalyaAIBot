@@ -3,7 +3,6 @@ import {
   COMMAND_TYPES,
   PROMPT_TEMPLATE_MAX_LENGTH,
   STATIC_RESPONSE_MAX_LENGTH,
-  SYSTEM_PROMPT_MAX_LENGTH,
   type Command,
   type CommandInput,
 } from '@bot/shared';
@@ -14,6 +13,7 @@ import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Choice } from '@/components/Choice';
 import { ConfirmButton, Field, IconButton } from '@/components/FormControls';
+import { ActiveProfileHint } from '@/components/ProfileSwitcher';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,12 +78,14 @@ export function CommandsPage() {
         </Button>
       </header>
 
+      <ActiveProfileHint />
+
       {config?.triggerMode === 'mention' && (
         <p className="text-sm text-amber-300">
           Le bot est en mode « Mention uniquement » : les commandes, appelées par le préfixe, ne
           fonctionnent pas. Changez de mode dans{' '}
-          <Link to="/comportement" className="underline">
-            Comportement
+          <Link to="/reponses" className="underline">
+            Réponses
           </Link>
           .
         </p>
@@ -269,7 +271,6 @@ function CommandEditor(props: {
               >
                 <Textarea
                   id="command-system"
-                  maxLength={SYSTEM_PROMPT_MAX_LENGTH}
                   placeholder="Vide : le persona du bot s'applique."
                   value={input.systemPrompt}
                   onChange={(event) => set({ systemPrompt: event.target.value })}

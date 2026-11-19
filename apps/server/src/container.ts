@@ -13,6 +13,7 @@ import { AuthService } from './services/authService';
 import { CommandService } from './services/commandService';
 import { ConfigService } from './services/configService';
 import { EventRuleService } from './services/eventRuleService';
+import { ProfileService } from './services/profileService';
 import { SecretsService } from './services/secretsService';
 
 export interface ContainerOptions {
@@ -34,14 +35,15 @@ export function createContainer(options: ContainerOptions) {
   const logBus = new LogBus();
   const auth = new AuthService(db, logBus);
   const secrets = new SecretsService(db, options.appSecret, options.envSecrets, logBus);
-  const config = new ConfigService(db, logBus);
+  const profiles = new ProfileService(db, logBus);
+  const config = new ConfigService(db, logBus, profiles);
   const getConfig = () => config.get();
   const aiProvider = options.createAiProvider(secrets);
   const ai = new AiService(aiProvider);
   const memory = new SessionStore();
   const rateLimiter = new RateLimiter();
-  const commands = new CommandService(db, logBus);
-  const eventRules = new EventRuleService(db, logBus);
+  const commands = new CommandService(db, logBus, profiles);
+  const eventRules = new EventRuleService(db, logBus, profiles);
   const events = new EventEngine({ getConfig, getRules: () => eventRules.list(), ai, logBus });
   const pipeline = new MessagePipeline({ getConfig, ai, memory, commands, rateLimiter, logBus });
   const bot = new BotManager(
@@ -57,6 +59,13 @@ export function createContainer(options: ContainerOptions) {
   secrets.onChange((name) => {
     if (name === 'geminiApiKey') ai.clearModelCache();
   });
+  // Un autre profil, c'est un autre persona : il ne reprend pas les conversations du précédent.
+  let activeProfile = profiles.state().activeId;
+  profiles.onChange(() => {
+    const { activeId } = profiles.state();
+    if (activeId !== activeProfile) memory.clear();
+    activeProfile = activeId;
+  });
   config.onChange((previous, next) => {
     if (previous.membersIntent !== next.membersIntent) {
       void bot.reconnect('Accès à la liste des membres modifié');
@@ -67,6 +76,7 @@ export function createContainer(options: ContainerOptions) {
     logBus,
     auth,
     secrets,
+    profiles,
     config,
     aiProvider,
     ai,

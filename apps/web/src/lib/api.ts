@@ -6,6 +6,7 @@ import {
   discoveredGuildSchema,
   eventRuleSchema,
   memorySessionSchema,
+  profilesStateSchema,
 } from '@bot/shared';
 import { queryOptions } from '@tanstack/react-query';
 
@@ -59,6 +60,11 @@ export const configQuery = queryOptions({
 export const commandsQuery = queryOptions({
   queryKey: ['commands'],
   queryFn: () => apiGet('/api/commands', commandSchema.array()),
+});
+
+export const profilesQuery = queryOptions({
+  queryKey: ['profiles'],
+  queryFn: () => apiGet('/api/profiles', profilesStateSchema),
 });
 
 export const eventRulesQuery = queryOptions({

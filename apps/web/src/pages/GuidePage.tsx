@@ -81,8 +81,8 @@ export function GuidePage() {
       done: false,
       body: (
         <>
-          Réglez le déclenchement, les salons et le persona dans{' '}
-          <InApp to="/comportement">Comportement</InApp>, essayez-les dans le{' '}
+          Choisissez le persona dans <InApp to="/personnalite">Personnalité</InApp>, quand et où le
+          bot répond dans <InApp to="/reponses">Réponses</InApp>, essayez dans le{' '}
           <InApp to="/simulateur">Simulateur</InApp>, puis sur Discord. La{' '}
           <InApp to="/console">Console</InApp> affiche chaque question, réponse ou erreur.
         </>

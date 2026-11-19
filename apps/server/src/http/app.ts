@@ -22,6 +22,7 @@ import { registerHealthRoute } from './routes/health';
 import { registerLogsRoutes } from './routes/logs';
 import { registerMemoryRoutes } from './routes/memory';
 import { registerPlaygroundRoutes } from './routes/playground';
+import { registerProfileRoutes } from './routes/profiles';
 import { registerSecretsRoutes } from './routes/secrets';
 import { SESSION_COOKIE } from './session';
 import { registerStatic } from './static';
@@ -34,7 +35,7 @@ export type AppDeps = Container & {
 /** Ne lance pas l'écoute : les tests passent par `app.inject()`. */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const { env, database, logBus, auth, secrets, config, ai, memory, commands, bot } = deps;
-  const { eventRules, events, pipeline } = deps;
+  const { eventRules, events, pipeline, profiles } = deps;
   const app = Fastify({
     logger: loggerOptions(env),
     bodyLimit: 1024 * 1024,
@@ -107,8 +108,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerMemoryRoutes(protectedApp, memory, config, logBus);
     registerCommandRoutes(protectedApp, commands);
     registerEventRoutes(protectedApp, eventRules, events);
+    registerProfileRoutes(protectedApp, profiles);
     registerPlaygroundRoutes(protectedApp, pipeline, events, eventRules, memory);
-    registerRealtimeRoutes(protectedApp, logBus, bot, memory, auth);
+    registerRealtimeRoutes(protectedApp, logBus, bot, memory, profiles, auth);
   });
 
   const hasWeb = await registerStatic(app, env.webDistDir);
